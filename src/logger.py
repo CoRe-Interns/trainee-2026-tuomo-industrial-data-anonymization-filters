@@ -5,10 +5,10 @@ import os
 def log_redaction(results, policy_name):
     log_file = "data/audit_log.csv"
     
-    # Luodaan data-kansio jos sitä ei ole
+    # Create the data folder if it does not exist
     os.makedirs("data", exist_ok=True)
     
-    # Tarkistetaan kirjoitetaanko otsikot (jos tiedosto on uusi)
+    # Check whether headers should be written (if the file is new)
     file_exists = os.path.isfile(log_file)
     
     with open(log_file, mode='a', newline='', encoding='utf-8') as f:
@@ -25,4 +25,4 @@ def log_redaction(results, policy_name):
                 res.end,
                 round(res.score, 2)
             ])
-    print(f"Audit log päivitetty: {log_file}")
+    print(f"Audit log updated: {log_file}")
