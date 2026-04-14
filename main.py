@@ -1,9 +1,10 @@
+import argparse
 import json
 import os
 from src.anonymizer import AnonymizerTool
 from src.logger import log_redaction # New import
 
-def run_anonymization():
+def run_anonymization(input_text=None):
     # 1. Settings
     config_path = os.path.join("configs", "light.json")
     with open(config_path, "r") as f:
@@ -12,8 +13,8 @@ def run_anonymization():
     # 2. Anonymization tool
     tool = AnonymizerTool(entities=config['entities'], threshold=config['threshold'])
 
-    # 3. Test text
-    test_input = "My name is John Doe and my email is john.doe@example.com"
+    # 3. Test text (default) or CLI-provided text
+    test_input = input_text or "My name is John Doe and my email is john.doe@example.com"
     
     # 4. Processing
     result_text, raw_results = tool.process_text(test_input)
@@ -26,4 +27,8 @@ def run_anonymization():
     print("--------------\n")
 
 if __name__ == "__main__":
-    run_anonymization()
+    parser = argparse.ArgumentParser(description="Run text anonymization")
+    parser.add_argument("--text", help="Input text to anonymize")
+    args = parser.parse_args()
+
+    run_anonymization(input_text=args.text)

@@ -1,3 +1,0 @@
-timestamp,policy,entity_type,start_pos,end_pos,confidence
-2026-04-13 10:14:47,light,EMAIL_ADDRESS,36,56,1.0
-2026-04-13 10:14:47,light,PERSON,11,19,0.85
