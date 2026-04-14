@@ -4,6 +4,7 @@
 		"PERSON",
 		"EMAIL_ADDRESS",
 		"PHONE_NUMBER",
+		"ID",
 		"CREDIT_CARD",
 		"IBAN_CODE",
 		"IP_ADDRESS",

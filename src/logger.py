@@ -3,10 +3,12 @@ from datetime import datetime
 import os
 
 def log_redaction(results, policy_name):
-    log_file = "data/audit_log.csv"
-    
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(project_root, "data")
+    log_file = os.path.join(data_dir, "audit_log.csv")
+
     # Create the data folder if it does not exist
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(data_dir, exist_ok=True)
     
     # Check whether headers should be written (if the file is new)
     file_exists = os.path.isfile(log_file)
