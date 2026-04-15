@@ -20,7 +20,11 @@ def run_anonymization(input_text=None, policy_name="light"):
     tool = AnonymizerTool(entities=config['entities'], threshold=config['threshold'], policy_name=policy_name)
 
     # 3. Test text (default) or CLI-provided text
-    test_input = input_text or "My name is John Doe and my email is john.doe@example.com"
+    test_input = (
+        input_text
+        if input_text is not None
+        else "My name is John Doe and my email is john.doe@example.com"
+    )
     
     # 4. Processing
     result_text, raw_results = tool.process_text(test_input)
