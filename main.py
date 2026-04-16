@@ -12,24 +12,22 @@ def load_config(policy_name):
         return json.load(f)
 
 
-def run_anonymization(input_text=None, policy_name="light"):
+def run_anonymization(input_text, policy_name="light"):
     # 1. Settings
     config = load_config(policy_name)
 
     # 2. Anonymization tool
-    tool = AnonymizerTool(entities=config['entities'], threshold=config['threshold'], policy_name=policy_name)
-
-    # 3. Test text (default) or CLI-provided text
-    test_input = (
-        input_text
-        if input_text is not None
-        else "My name is John Doe and my email is john.doe@example.com"
+    tool = AnonymizerTool(
+        entities=config['entities'],
+        threshold=config['threshold'],
+        policy_name=policy_name,
+        language=config.get('language', 'en'),
     )
-    
-    # 4. Processing
-    result_text, raw_results = tool.process_text(test_input)
 
-    # 5. Logging
+    # 3. Processing
+    result_text, raw_results = tool.process_text(input_text)
+
+    # 4. Logging
     log_redaction(raw_results, config['policy_name'])
 
     print("\n--- RESULT ---")
@@ -38,7 +36,7 @@ def run_anonymization(input_text=None, policy_name="light"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run text anonymization")
-    parser.add_argument("--text", help="Input text to anonymize")
+    parser.add_argument("--text", required=True, help="Input text to anonymize")
     parser.add_argument(
         "--policy",
         default="light",

@@ -3,12 +3,13 @@ import re
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 
 class AnonymizerTool:
-    def __init__(self, entities, threshold, policy_name="light"):
+    def __init__(self, entities, threshold, policy_name="light", language="en"):
         # Initialize Presidio engines
         self.analyzer = AnalyzerEngine()
         self.entities = entities
         self.threshold = threshold
         self.policy_name = policy_name
+        self.language = language
         self._register_custom_recognizers()
 
     def _register_custom_recognizers(self):
@@ -94,7 +95,7 @@ class AnonymizerTool:
         raw_results = self.analyzer.analyze(
             text=text, 
             entities=self.entities, 
-            language='en', 
+            language=self.language, 
             score_threshold=self.threshold
         )
 
@@ -135,24 +136,40 @@ class AnonymizerTool:
         return sorted(selected, key=lambda r: (r.start, r.end))
 
     def _apply_pseudonyms(self, text, results):
-        person_map = {}
+        placeholder_maps = {}
+        placeholder_counters = {}
 
-        for result in results:
-            if result.entity_type != "PERSON":
-                continue
-            original = text[result.start:result.end].strip().lower()
-            if original and original not in person_map:
-                person_map[original] = f"<PERSON{len(person_map) + 1}>"
+        def placeholder_for(result, span_text):
+            normalized = span_text.strip().lower()
+            entity_type = result.entity_type
+
+            if entity_type == "LOCATION":
+                return self._location_placeholder(span_text)
+
+            entity_label = {
+                "PERSON": "NAME",
+                "EMAIL_ADDRESS": "EMAIL",
+                "PHONE_NUMBER": "PHONE",
+                "ID": "ID",
+                "CREDIT_CARD": "CREDIT_CARD",
+                "IBAN_CODE": "IBAN",
+                "IP_ADDRESS": "IP_ADDRESS",
+            }.get(entity_type, entity_type)
+
+            entity_map = placeholder_maps.setdefault(entity_type, {})
+            if normalized in entity_map:
+                return entity_map[normalized]
+
+            next_index = placeholder_counters.get(entity_type, 0) + 1
+            placeholder_counters[entity_type] = next_index
+            placeholder = f"[{entity_label}{next_index}]"
+            entity_map[normalized] = placeholder
+            return placeholder
 
         anonymized_text = text
         for result in sorted(results, key=lambda r: r.start, reverse=True):
             span_value = text[result.start:result.end]
-            if result.entity_type == "PERSON":
-                replacement = person_map.get(span_value.strip().lower(), "<PERSON>")
-            elif result.entity_type == "LOCATION":
-                replacement = self._location_placeholder(span_value)
-            else:
-                replacement = f"<{result.entity_type}>"
+            replacement = placeholder_for(result, span_value)
 
             anonymized_text = (
                 anonymized_text[:result.start]
@@ -164,24 +181,24 @@ class AnonymizerTool:
 
     def _location_placeholder(self, span_text):
         if self.policy_name == "strict":
-            return "<LOCATION>"
+            return "[LOCATION]"
 
         lowered = span_text.lower()
 
         if any(keyword in lowered for keyword in ["country", "nation", "state"]):
-            return "<COUNTRY>"
+            return "[COUNTRY]"
         if any(keyword in lowered for keyword in ["city", "town", "village", "municipality"]):
-            return "<CITY>"
+            return "[CITY]"
         if any(keyword in lowered for keyword in ["site", "plant", "facility", "factory", "mill", "unit"]):
-            return "<SITE>"
+            return "[SITE]"
         if any(keyword in lowered for keyword in ["address", "street", "road", "avenue", "lane", "postal", "zip"]):
-            return "<ADDRESS>"
+            return "[ADDRESS]"
 
         if any(char.isdigit() for char in span_text):
-            return "<ADDRESS>"
+            return "[ADDRESS]"
 
         tokens = [token for token in re.findall(r"[A-Za-zÅÄÖåäö]+", span_text)]
         if len(tokens) <= 2:
-            return "<CITY>"
+            return "[CITY]"
 
-        return "<LOCATION>"
+        return "[LOCATION]"
