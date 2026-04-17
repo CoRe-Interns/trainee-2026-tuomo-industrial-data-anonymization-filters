@@ -139,9 +139,24 @@ class AnonymizerTool:
         placeholder_maps = {}
         placeholder_counters = {}
 
+        strict_labels = {
+            "PERSON": "NAME",
+            "EMAIL_ADDRESS": "EMAIL",
+            "PHONE_NUMBER": "PHONE",
+            "ID": "ID",
+            "CREDIT_CARD": "CREDIT_CARD",
+            "IBAN_CODE": "IBAN",
+            "IP_ADDRESS": "IP_ADDRESS",
+            "LOCATION": "LOCATION",
+        }
+
         def placeholder_for(result, span_text):
             normalized = span_text.strip().lower()
             entity_type = result.entity_type
+
+            if self.policy_name == "strict":
+                strict_label = strict_labels.get(entity_type, entity_type)
+                return f"[{strict_label}]"
 
             if entity_type == "LOCATION":
                 return self._location_placeholder(span_text)

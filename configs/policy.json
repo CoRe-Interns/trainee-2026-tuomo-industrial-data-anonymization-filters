@@ -1,0 +1,18 @@
+{
+    "policy_name": "policy",
+    "entities": [
+        "PERSON",
+        "EMAIL_ADDRESS",
+        "PHONE_NUMBER",
+        "ID",
+        "CREDIT_CARD",
+        "IBAN_CODE",
+        "IP_ADDRESS",
+        "LOCATION"
+    ],
+    "thresholds": {
+        "light": 0.4,
+        "strict": 0.3
+    },
+    "language": "en"
+}

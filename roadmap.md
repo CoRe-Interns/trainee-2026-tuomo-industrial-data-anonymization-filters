@@ -20,7 +20,7 @@ Outputs: anonymization toolkit/CLI or service + policy-based filtering modes, te
   - `re`
   - `hmac`
 - Package the solution as a CLI and/or local service with:
-  - policy modes such as `strict` and `light`
+  - policy modes such as `strict`=Pseudonymize and `light`= anonymize
   - configuration files for redaction behavior
 - Optimize processing for on-device / edge deployment in privacy-critical environments
 - Implement voice anonymization for audio

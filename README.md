@@ -2,28 +2,32 @@
 
 This repository contains a local-first anonymization prototype for industrial pilot data.
 The current implementation focuses on text anonymization with policy-based behavior,
-deterministic placeholders, and CSV audit logging.
+deterministic placeholders, CSV audit logging, and file-based text processing with file-type routing.
 
 ## Current scope
 
 - Text anonymization is implemented.
-- Policies are implemented via JSON configs (`light` and `strict`).
+- File-based input/output processing is implemented for text files.
+- File type recognition is implemented for routing text, image, audio, and video files.
+- Policies are implemented via a single JSON config file with mode-based thresholds.
 - Audit logging is implemented to `data/audit_log.csv`.
-- Image, video, and audio anonymization are planned but not implemented yet.
+- Image, video, and audio files are currently routed and reported as not implemented.
 
 ## Repository structure
 
 ```text
 .
 |-- main.py                     # CLI entrypoint
+|-- roadmap.md                  # Canonical project roadmap
 |-- configs/
-|   |-- light.json             # Light policy
-|   `-- strict.json            # Strict policy
+|   `-- policy.json            # Shared entity set and per-mode thresholds
 |-- src/
 |   |-- anonymizer.py          # Presidio + custom recognizers
+|   |-- file_pipeline.py       # File routing and text file processing
 |   `-- logger.py              # Audit log writer
 |-- tests/
 |   |-- test_text_anonymization.py
+|   |-- test_file_pipeline.py
 |   `-- run_text_anonymization_cases.py
 `-- data/
     `-- audit_log.csv          # Generated/appended at runtime
@@ -48,29 +52,64 @@ Run anonymization from CLI:
 python main.py --text "Operator: John Carter | Email: john.carter@acme.com | Phone: +358401234567" --policy strict
 ```
 
+Process a single file:
+
+```bash
+python main.py --input-file data/input/sample.txt --output-file data/output/sample.anonymized.txt --policy strict
+```
+
+Process a directory:
+
+```bash
+python main.py --input-dir data/input --output-dir data/output --recursive --policy light
+```
+
+Use default folders (recommended):
+
+```bash
+python main.py --batch --policy strict
+```
+
+This reads files from `data/input` and writes anonymized files and reports to `data/output`.
+
+You can also run without mode flags and it will use the same default folders:
+
+```bash
+python main.py --policy strict
+```
+
 Arguments:
 
 - `--text` (required): input text to anonymize.
+- `--input-file`: anonymize a single file.
+- `--input-dir`: anonymize files in a directory.
+- `--batch`: process default folders (`data/input` -> `data/output`).
+- `--output-file`: target file for a single-file run.
+- `--output-dir`: target directory for file or directory runs.
+- `--recursive`: process nested files in directory mode.
 - `--policy` (optional): `light` or `strict` (default: `light`).
 
 Example output:
 
 - anonymized text in terminal
 - appended rows in `data/audit_log.csv`
+- generated anonymized files and per-file report JSON files in the output directory
 
 ## Policy behavior
 
 - `light` policy:
-  - focuses on common entities (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `LOCATION`)
+  - pseudonymizes detected values with stable placeholders per distinct value (for example `[NAME1]`, `[EMAIL1]`)
+  - uses the shared entity set from `configs/policy.json`
   - higher threshold than strict policy
 - `strict` policy:
-  - includes additional high-risk entities (`ID`, `CREDIT_CARD`, `IBAN_CODE`, `IP_ADDRESS`)
+  - anonymizes detected values with generic non-indexed placeholders (for example `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ID]`)
   - lower threshold for broader detection
 
 Policy files:
 
-- `configs/light.json`
-- `configs/strict.json`
+- `configs/policy.json`
+
+The shared entity set currently includes `PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `ID`, `CREDIT_CARD`, `IBAN_CODE`, `IP_ADDRESS`, and `LOCATION`.
 
 ## Test and validation
 
@@ -90,6 +129,8 @@ python tests/run_text_anonymization_cases.py
 
 Audit log file: `data/audit_log.csv`
 
+Per-file report file: `*.report.json` next to each generated anonymized file or routed input file.
+
 Columns:
 
 - `timestamp`
@@ -103,8 +144,6 @@ Columns:
 
 Planned next steps:
 
-- Add file-based input/output pipeline with file type recognition.
-- Preserve existing CLI text mode while adding file/folder processing mode.
 - Add UI on top of stable pipeline contracts.
 - Add audio anonymization.
 - Add image anonymization.

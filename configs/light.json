@@ -1,5 +1,0 @@
-{
-    "policy_name": "light",
-    "entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION"],
-    "threshold": 0.4
-}
