@@ -1,40 +1,117 @@
 # Industrial Data Anonymization Filters
 
-Prototype a local-first anonymization toolkit that makes industrial pilot data safer to share and process by removing or masking personal information from text, images, video, and audio while preserving as much operational utility as possible.
+This repository contains a local-first anonymization prototype for industrial pilot data.
+The current implementation focuses on text anonymization with policy-based behavior,
+deterministic placeholders, and CSV audit logging.
 
-Real industrial data often includes sensitive personal information such as faces in video, name tags, spoken names, phone numbers, IDs, and email addresses. This work focuses on building practical anonymization filters that run locally or on-device, helping companies use data for internal pilots without unnecessary privacy risks.
+## Current scope
 
-Outputs: anonymization toolkit/CLI or service + policy-based filtering modes, text/image/video/audio anonymization pipelines, audit log format and redaction reports, before/after examples, utility-impact notes, and deployment guidance for on-prem vs cloud processing.
+- Text anonymization is implemented.
+- Policies are implemented via JSON configs (`light` and `strict`).
+- Audit logging is implemented to `data/audit_log.csv`.
+- Image, video, and audio anonymization are planned but not implemented yet.
 
-## Student will do
+## Repository structure
 
-- Implement personal-data removal in text:
-  - detect emails, phone numbers, IDs, and similar structured data with simple patterns
-  - detect person names with NER models
-  - replace findings with placeholders such as `[NAME1]`, `[EMAIL1]`, `[ID1]`
-  - log what was changed in an audit trail
-- Use common Python libraries for anonymization such as:
-  - `presidio-analyzer`
-  - `presidio-anonymizer`
-  - `spaCy`
-  - `re`
-  - `hmac`
-- Package the solution as a CLI and/or local service with:
-  - policy modes such as `strict` and `light`
-  - configuration files for redaction behavior
-- Optimize processing for on-device / edge deployment in privacy-critical environments
-- Implement voice anonymization for audio
-- Build face and badge blurring for images and videos
-- Log what was redacted, where applicable, together with confidence levels
+```text
+.
+|-- main.py                     # CLI entrypoint
+|-- configs/
+|   |-- light.json             # Light policy
+|   `-- strict.json            # Strict policy
+|-- src/
+|   |-- anonymizer.py          # Presidio + custom recognizers
+|   `-- logger.py              # Audit log writer
+|-- tests/
+|   |-- test_text_anonymization.py
+|   `-- run_text_anonymization_cases.py
+`-- data/
+    `-- audit_log.csv          # Generated/appended at runtime
+```
 
-## Expected outputs
+## Requirements
 
-- Anonymization toolkit with sample configs and audit log format
-- Before/after samples for text, image, video, and audio cases
-- Short impact report on downstream model/data usefulness after anonymization
-- Guidelines for choosing on-prem vs cloud processing approaches
+- Python 3.10+ recommended
+- Local environment with ability to install dependencies from `requirements.txt`
 
-## Optional extensions
+Install dependencies:
 
-- Integrate with a transcription pipeline and anonymize private information in transcripts produced from audio
-- Assess utility loss on downstream tasks such as pose estimation or quality control before vs after anonymization
+```bash
+pip install -r requirements.txt
+```
+
+## How to run
+
+Run anonymization from CLI:
+
+```bash
+python main.py --text "Operator: John Carter | Email: john.carter@acme.com | Phone: +358401234567" --policy strict
+```
+
+Arguments:
+
+- `--text` (required): input text to anonymize.
+- `--policy` (optional): `light` or `strict` (default: `light`).
+
+Example output:
+
+- anonymized text in terminal
+- appended rows in `data/audit_log.csv`
+
+## Policy behavior
+
+- `light` policy:
+  - focuses on common entities (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `LOCATION`)
+  - higher threshold than strict policy
+- `strict` policy:
+  - includes additional high-risk entities (`ID`, `CREDIT_CARD`, `IBAN_CODE`, `IP_ADDRESS`)
+  - lower threshold for broader detection
+
+Policy files:
+
+- `configs/light.json`
+- `configs/strict.json`
+
+## Test and validation
+
+Run unit tests:
+
+```bash
+python -m pytest -q
+```
+
+Run sample text cases:
+
+```bash
+python tests/run_text_anonymization_cases.py
+```
+
+## Output and audit log format
+
+Audit log file: `data/audit_log.csv`
+
+Columns:
+
+- `timestamp`
+- `policy`
+- `entity_type`
+- `start_pos`
+- `end_pos`
+- `confidence`
+
+## Roadmap
+
+Planned next steps:
+
+- Add file-based input/output pipeline with file type recognition.
+- Preserve existing CLI text mode while adding file/folder processing mode.
+- Add UI on top of stable pipeline contracts.
+- Add audio anonymization.
+- Add image anonymization.
+- Add video anonymization.
+
+## Notes for contributors
+
+- Keep changes small and focused.
+- Update this README whenever behavior, CLI arguments, configs, or outputs change.
+- Prefer local-first processing and explicit auditability.
