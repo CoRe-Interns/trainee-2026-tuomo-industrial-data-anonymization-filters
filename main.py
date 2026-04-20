@@ -48,6 +48,7 @@ if __name__ == "__main__":
     mode.add_argument("--input-file", help="Input file to anonymize")
     mode.add_argument("--input-dir", help="Input directory to anonymize")
     mode.add_argument("--batch", action="store_true", help="Process default data/input to data/output")
+    mode.add_argument("--ui", action="store_true", help="Open the desktop UI")
     parser.add_argument("--output-file", help="Output file for --input-file mode")
     parser.add_argument("--output-dir", help="Output directory for --input-file or --input-dir mode")
     parser.add_argument("--recursive", action="store_true", help="Recursively process files under --input-dir")
@@ -61,6 +62,12 @@ if __name__ == "__main__":
 
     if args.output_file and (args.batch or args.input_dir):
         parser.error("--output-file can be used only with --input-file")
+
+    if args.ui:
+        from src.gui_app import launch_app
+
+        launch_app()
+        raise SystemExit(0)
 
     run_default_batch = (
         args.batch

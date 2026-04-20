@@ -70,6 +70,12 @@ Use default folders (recommended):
 python main.py --batch --policy strict
 ```
 
+Open the desktop UI:
+
+```bash
+python main.py --ui
+```
+
 This reads files from `data/input` and writes anonymized files and reports to `data/output`.
 
 You can also run without mode flags and it will use the same default folders:
@@ -78,16 +84,26 @@ You can also run without mode flags and it will use the same default folders:
 python main.py --policy strict
 ```
 
-Arguments:
+Arguments: (All of these require "python main.py" and then the command in terminal)
 
 - `--text` (required): input text to anonymize.
 - `--input-file`: anonymize a single file.
 - `--input-dir`: anonymize files in a directory.
 - `--batch`: process default folders (`data/input` -> `data/output`).
+- `--ui`: open the desktop UI.
 - `--output-file`: target file for a single-file run.
 - `--output-dir`: target directory for file or directory runs.
 - `--recursive`: process nested files in directory mode.
 - `--policy` (optional): `light` or `strict` (default: `light`).
+
+## Desktop UI
+
+The desktop app has two working areas:
+
+- Text tab for pasting text and anonymizing it immediately.
+- Folder Batch tab for processing the `data/input` folder into `data/output`.
+
+The UI uses the same pipeline and policies as the CLI, so output files and audit logging stay consistent.
 
 Example output:
 
