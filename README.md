@@ -115,7 +115,11 @@ Example output:
 
 - `light` policy:
   - pseudonymizes detected values with stable placeholders per distinct value (for example `[NAME1]`, `[EMAIL1]`)
+  - assigns pseudonym indices by first appearance in text (left to right)
   - uses the shared entity set from `configs/policy.json`
+  - keeps industrial numeric location labels (for example `Helsinki Plant Unit 3`) as location candidates
+  - detects both labeled and unlabeled industrial location phrases (for example `at Helsinki Plant Unit 3`)
+  - preserves surrounding prepositions in text (for example `at [SITE]`)
   - higher threshold than strict policy
 - `strict` policy:
   - anonymizes detected values with generic non-indexed placeholders (for example `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ID]`)

@@ -42,6 +42,56 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertIn("[SITE]", anonymized)
         self.assertNotIn("Helsinki", anonymized)
 
+    def test_light_policy_masks_numeric_industrial_location(self):
+        tool = AnonymizerTool(
+            entities=["LOCATION"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        anonymized, _ = tool.process_text("Site: Helsinki Plant Unit 3")
+
+        self.assertIn("[SITE]", anonymized)
+        self.assertNotIn("Helsinki Plant Unit 3", anonymized)
+
+    def test_light_policy_masks_unlabeled_industrial_location_phrase(self):
+        tool = AnonymizerTool(
+            entities=["LOCATION"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Shift handover at Helsinki Plant Unit 3 with maintenance team"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertIn("at [SITE]", anonymized)
+        self.assertNotIn("Helsinki Plant Unit 3", anonymized)
+
+    def test_light_policy_does_not_swallow_person_before_industrial_location(self):
+        tool = AnonymizerTool(
+            entities=["PERSON", "LOCATION"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Supervisor Mike Adams at Helsinki Plant Unit 3 reviewed alarms"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertIn("Supervisor [NAME1] at [SITE]", anonymized)
+        self.assertNotIn("Helsinki Plant Unit 3", anonymized)
+
+    def test_light_policy_still_filters_phone_like_location_false_positive(self):
+        tool = AnonymizerTool(
+            entities=["LOCATION"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Location: phone 0401239876"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertEqual(anonymized, text)
+
     def test_phone_and_email_are_masked(self):
         tool = AnonymizerTool(
             entities=["EMAIL_ADDRESS", "PHONE_NUMBER"],
@@ -153,6 +203,22 @@ class TextAnonymizationTests(unittest.TestCase):
         anonymized, _ = tool.process_text(text)
 
         self.assertEqual(anonymized.count("[EMAIL1]"), 2)
+
+    def test_light_mode_assigns_names_in_left_to_right_order(self):
+        tool = AnonymizerTool(
+            entities=["PERSON"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Operator: John Carter, Supervisor: Anna Virtanen, Engineer: Mike Adams"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertIn("[NAME1]", anonymized)
+        self.assertIn("[NAME2]", anonymized)
+        self.assertIn("[NAME3]", anonymized)
+        self.assertLess(anonymized.index("[NAME1]"), anonymized.index("[NAME2]"))
+        self.assertLess(anonymized.index("[NAME2]"), anonymized.index("[NAME3]"))
 
     def test_load_config_works_outside_repo_cwd(self):
         original_cwd = os.getcwd()

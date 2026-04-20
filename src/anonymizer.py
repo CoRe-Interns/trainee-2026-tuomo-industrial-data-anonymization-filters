@@ -81,6 +81,16 @@ class AnonymizerTool:
                 ),
                 score=0.75,
             ),
+            Pattern(
+                name="industrial_location_phrase",
+                regex=(
+                    r"(?i)(?:(?<=\bat\s)|(?<=\bin\s)|(?<=\bon\s)|(?<=\bfrom\s)|(?<=\bnear\s))"
+                    r"[^\W\d_]+(?:[\s'-][^\W\d_]+){0,2}\s+"
+                    r"(?:plant|facility|factory|mill|site|refinery)\b"
+                    r"(?:\s+(?:unit|building|block|line|zone)\s*[-#]?\s*\d+[A-Za-z]?)?\b"
+                ),
+                score=0.9,
+            ),
         ]
         self.analyzer.registry.add_recognizer(
             PatternRecognizer(
@@ -105,7 +115,28 @@ class AnonymizerTool:
             # Drop location false positives which often overlap phone/id-style fields.
             if result.entity_type == "LOCATION":
                 lowered = span_text.lower()
-                if any(char.isdigit() for char in span_text) or "phone" in lowered:
+                has_digits = any(char.isdigit() for char in span_text)
+                has_location_keyword = any(
+                    keyword in lowered
+                    for keyword in [
+                        "site",
+                        "plant",
+                        "facility",
+                        "factory",
+                        "mill",
+                        "unit",
+                        "building",
+                        "address",
+                        "street",
+                        "road",
+                        "avenue",
+                        "lane",
+                        "city",
+                    ]
+                )
+                if "phone" in lowered:
+                    continue
+                if has_digits and not has_location_keyword:
                     continue
             results.append(result)
 
@@ -138,6 +169,7 @@ class AnonymizerTool:
     def _apply_pseudonyms(self, text, results):
         placeholder_maps = {}
         placeholder_counters = {}
+        replacements = {}
 
         strict_labels = {
             "PERSON": "NAME",
@@ -181,10 +213,14 @@ class AnonymizerTool:
             entity_map[normalized] = placeholder
             return placeholder
 
+        # Assign pseudonym labels in natural left-to-right order.
+        for result in sorted(results, key=lambda r: (r.start, r.end)):
+            span_value = text[result.start:result.end]
+            replacements[(result.start, result.end)] = placeholder_for(result, span_value)
+
         anonymized_text = text
         for result in sorted(results, key=lambda r: r.start, reverse=True):
-            span_value = text[result.start:result.end]
-            replacement = placeholder_for(result, span_value)
+            replacement = replacements[(result.start, result.end)]
 
             anonymized_text = (
                 anonymized_text[:result.start]
