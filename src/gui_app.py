@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -45,6 +48,51 @@ def format_result_line(result: FileProcessingResult) -> str:
     return " | ".join(details)
 
 
+def build_result_detail(result: FileProcessingResult, preview_chars: int = 900) -> str:
+    lines = [
+        f"Input: {result.input_path}",
+        f"Kind: {result.detected_kind}",
+        f"Status: {result.status}",
+        f"Policy: {result.policy_name}",
+    ]
+    if result.output_path:
+        lines.append(f"Output: {result.output_path}")
+    if result.report_path:
+        lines.append(f"Report: {result.report_path}")
+    if result.message:
+        lines.append(f"Message: {result.message}")
+
+    if result.output_path and Path(result.output_path).exists():
+        try:
+            preview = Path(result.output_path).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:  # pragma: no cover - filesystem error path
+            lines.append(f"Preview error: {exc}")
+        else:
+            preview = preview.strip()
+            if preview:
+                lines.append("")
+                lines.append("Preview:")
+                lines.append(preview[:preview_chars])
+
+    return "\n".join(lines)
+
+
+def open_folder(path: str | Path) -> None:
+    folder = Path(path)
+    if not folder.exists():
+        raise FileNotFoundError(f"Path does not exist: {folder}")
+
+    if hasattr(os, "startfile"):
+        os.startfile(str(folder))  # type: ignore[attr-defined]
+        return
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(folder)], check=False)
+        return
+
+    subprocess.run(["xdg-open", str(folder)], check=False)
+
+
 class AnonymizationApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -58,6 +106,9 @@ class AnonymizationApp(tk.Tk):
         self.batch_output_var = tk.StringVar(value=str(DEFAULT_OUTPUT_DIR))
         self.recursive_var = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="Ready")
+        self.batch_summary_var = tk.StringVar(value="No batch run yet")
+        self.batch_selection_var = tk.StringVar(value="Select a batch result to preview it here")
+        self.batch_results: list[FileProcessingResult] = []
 
         self._build_ui()
 
@@ -72,8 +123,8 @@ class AnonymizationApp(tk.Tk):
         self.batch_tab = ttk.Frame(notebook, padding=12)
         self.log_tab = ttk.Frame(notebook, padding=12)
 
-        notebook.add(self.text_tab, text="Text")
         notebook.add(self.batch_tab, text="Folder Batch")
+        notebook.add(self.text_tab, text="Text")
         notebook.add(self.log_tab, text="Status")
 
         self._build_text_tab()
@@ -112,6 +163,8 @@ class AnonymizationApp(tk.Tk):
 
     def _build_batch_tab(self) -> None:
         self.batch_tab.columnconfigure(1, weight=1)
+        self.batch_tab.rowconfigure(6, weight=1)
+        self.batch_tab.rowconfigure(8, weight=1)
 
         ttk.Label(self.batch_tab, text="Policy").grid(row=0, column=0, sticky="w", pady=(0, 8))
         policy_box = ttk.Combobox(
@@ -143,13 +196,57 @@ class AnonymizationApp(tk.Tk):
         action_row.grid(row=4, column=1, sticky="w")
         ttk.Button(action_row, text="Run Folder Batch", command=self._run_folder_batch).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(action_row, text="Reset Defaults", command=self._reset_default_folders).grid(row=0, column=1)
+        ttk.Button(action_row, text="Open Output Folder", command=self._open_output_folder).grid(row=0, column=2, padx=(8, 0))
+
+        summary_frame = ttk.LabelFrame(self.batch_tab, text="Batch Summary", padding=10)
+        summary_frame.grid(row=5, column=1, sticky="ew", pady=(16, 8))
+        summary_frame.columnconfigure(0, weight=1)
+        ttk.Label(summary_frame, textvariable=self.batch_summary_var).grid(row=0, column=0, sticky="w")
+
+        results_frame = ttk.LabelFrame(self.batch_tab, text="Results", padding=10)
+        results_frame.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=(0, 8))
+        results_frame.columnconfigure(0, weight=1)
+        results_frame.rowconfigure(0, weight=1)
+
+        self.batch_tree = ttk.Treeview(
+            results_frame,
+            columns=("kind", "status", "output", "report"),
+            show="headings",
+            selectmode="browse",
+            height=8,
+        )
+        for column, heading, width in (
+            ("kind", "Kind", 100),
+            ("status", "Status", 100),
+            ("output", "Output", 320),
+            ("report", "Report", 280),
+        ):
+            self.batch_tree.heading(column, text=heading)
+            self.batch_tree.column(column, width=width, anchor="w")
+        self.batch_tree.grid(row=0, column=0, sticky="nsew")
+        self.batch_tree.bind("<<TreeviewSelect>>", self._on_batch_tree_select)
+
+        tree_scroll = ttk.Scrollbar(results_frame, command=self.batch_tree.yview)
+        tree_scroll.grid(row=0, column=1, sticky="ns")
+        self.batch_tree.configure(yscrollcommand=tree_scroll.set)
+
+        detail_frame = ttk.LabelFrame(self.batch_tab, text="Selected Result Preview", padding=10)
+        detail_frame.grid(row=8, column=0, columnspan=2, sticky="nsew")
+        detail_frame.columnconfigure(0, weight=1)
+        detail_frame.rowconfigure(0, weight=1)
+
+        self.batch_detail_text = tk.Text(detail_frame, wrap="word", state="disabled", height=12)
+        self.batch_detail_text.grid(row=0, column=0, sticky="nsew")
+        detail_scroll = ttk.Scrollbar(detail_frame, command=self.batch_detail_text.yview)
+        detail_scroll.grid(row=0, column=1, sticky="ns")
+        self.batch_detail_text.configure(yscrollcommand=detail_scroll.set)
 
         help_text = (
             f"Default input: {DEFAULT_INPUT_DIR}\n"
             f"Default output: {DEFAULT_OUTPUT_DIR}\n"
             "Files are anonymized into the output folder and each run writes a per-file report."
         )
-        ttk.Label(self.batch_tab, text=help_text, justify="left").grid(row=5, column=1, sticky="w", pady=(16, 0))
+        ttk.Label(self.batch_tab, text=help_text, justify="left").grid(row=7, column=1, sticky="w", pady=(0, 8))
 
     def _build_log_tab(self) -> None:
         self.log_tab.rowconfigure(0, weight=1)
@@ -252,7 +349,15 @@ class AnonymizationApp(tk.Tk):
         policy_name: str,
         recursive: bool,
     ) -> None:
+        self.batch_results = results
         counts = summarize_results(results)
+        self.batch_summary_var.set(
+            f"Total: {counts.total} | Processed: {counts.processed} | Skipped: {counts.skipped} | Errors: {counts.errors}"
+        )
+        self._populate_results_table(results)
+        self._show_batch_detail(
+            f"Batch finished for {input_dir}\nOutput folder: {output_dir}\nPolicy: {policy_name}\nRecursive: {recursive}\n\nSelect a result row to preview its details."
+        )
         self._set_status(
             f"Folder batch complete: {counts.processed} processed, {counts.skipped} skipped, {counts.errors} errors"
         )
@@ -263,6 +368,56 @@ class AnonymizationApp(tk.Tk):
             self._append_log(format_result_line(result))
         if not results:
             self._append_log(f"BATCH | no files found | input={input_dir} | output={output_dir}")
+
+    def _populate_results_table(self, results: list[FileProcessingResult]) -> None:
+        for row in self.batch_tree.get_children():
+            self.batch_tree.delete(row)
+
+        for index, result in enumerate(results):
+            self.batch_tree.insert(
+                "",
+                tk.END,
+                iid=str(index),
+                values=(
+                    result.detected_kind,
+                    result.status,
+                    result.output_path or "-",
+                    result.report_path or "-",
+                ),
+            )
+
+        if results:
+            self.batch_tree.selection_set("0")
+            self.batch_tree.focus("0")
+            self._show_batch_detail(build_result_detail(results[0]))
+        else:
+            self._show_batch_detail("No files were processed.")
+
+    def _on_batch_tree_select(self, _event: tk.Event) -> None:
+        selection = self.batch_tree.selection()
+        if not selection:
+            return
+
+        index = int(selection[0])
+        if 0 <= index < len(self.batch_results):
+            self._show_batch_detail(build_result_detail(self.batch_results[index]))
+
+    def _show_batch_detail(self, value: str) -> None:
+        self.batch_detail_text.configure(state="normal")
+        self.batch_detail_text.delete("1.0", tk.END)
+        self.batch_detail_text.insert(tk.END, value)
+        self.batch_detail_text.configure(state="disabled")
+
+    def _open_output_folder(self) -> None:
+        folder = Path(self.batch_output_var.get()).expanduser()
+        if not folder.exists():
+            messagebox.showinfo("Folder missing", f"Output folder does not exist yet: {folder}")
+            return
+
+        try:
+            open_folder(folder)
+        except Exception as exc:  # pragma: no cover - platform/file-manager path
+            messagebox.showerror("Unable to open folder", str(exc))
 
     def _set_text_output(self, value: str) -> None:
         self.text_output.configure(state="normal")

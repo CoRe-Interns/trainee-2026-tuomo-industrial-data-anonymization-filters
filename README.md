@@ -103,6 +103,15 @@ The desktop app has two working areas:
 - Text tab for pasting text and anonymizing it immediately.
 - Folder Batch tab for processing the `data/input` folder into `data/output`.
 
+The app opens on the Folder Batch tab by default.
+
+Batch tab highlights:
+
+- run summary with total/processed/skipped/error counts
+- selectable results table for each processed or skipped file
+- preview panel for selected result details and anonymized output snippets
+- quick button to open the output folder
+
 The UI uses the same pipeline and policies as the CLI, so output files and audit logging stay consistent.
 
 Example output:

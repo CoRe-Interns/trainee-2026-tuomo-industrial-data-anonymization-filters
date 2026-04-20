@@ -1,7 +1,7 @@
 import unittest
 
 from src.file_pipeline import FileProcessingResult
-from src.gui_app import format_result_line, summarize_results
+from src.gui_app import build_result_detail, format_result_line, summarize_results
 
 
 class GuiHelpersTests(unittest.TestCase):
@@ -38,3 +38,24 @@ class GuiHelpersTests(unittest.TestCase):
         self.assertIn("output=sample.anonymized.txt", line)
         self.assertIn("report=sample.report.json", line)
         self.assertIn("done", line)
+
+    def test_build_result_detail_includes_metadata_lines(self):
+        result = FileProcessingResult(
+            input_path="sample.txt",
+            detected_kind="text",
+            status="processed",
+            policy_name="strict",
+            output_path="sample.anonymized.txt",
+            report_path="sample.report.json",
+            message="ok",
+        )
+
+        detail = build_result_detail(result)
+
+        self.assertIn("Input: sample.txt", detail)
+        self.assertIn("Kind: text", detail)
+        self.assertIn("Status: processed", detail)
+        self.assertIn("Policy: strict", detail)
+        self.assertIn("Output: sample.anonymized.txt", detail)
+        self.assertIn("Report: sample.report.json", detail)
+        self.assertIn("Message: ok", detail)
