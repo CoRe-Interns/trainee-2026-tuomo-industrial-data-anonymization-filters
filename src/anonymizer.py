@@ -112,6 +112,11 @@ class AnonymizerTool:
         results = []
         for result in raw_results:
             span_text = text[result.start:result.end]
+            if result.entity_type == "PERSON":
+                lowered = span_text.strip().lower()
+                if lowered in {"email", "phone", "id", "badge", "employee"}:
+                    continue
+
             # Drop location false positives which often overlap phone/id-style fields.
             if result.entity_type == "LOCATION":
                 lowered = span_text.lower()

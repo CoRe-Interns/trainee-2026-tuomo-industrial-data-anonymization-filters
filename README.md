@@ -1,17 +1,7 @@
 # Industrial Data Anonymization Filters
 
 This repository contains a local-first anonymization prototype for industrial pilot data.
-The current implementation focuses on text anonymization with policy-based behavior,
-deterministic placeholders, CSV audit logging, and file-based text processing with file-type routing.
-
-## Current scope
-
-- Text anonymization is implemented.
-- File-based input/output processing is implemented for text files.
-- File type recognition is implemented for routing text, image, audio, and video files.
-- Policies are implemented via a single JSON config file with mode-based thresholds.
-- Audit logging is implemented to `data/audit_log.csv`.
-- Image, video, and audio files are currently routed and reported as not implemented.
+The current implementation focuses on text anonymization with policy-based behavior, deterministic placeholders, CSV audit logging, and file-based text processing with file-type routing.
 
 ## Repository structure
 
@@ -84,12 +74,12 @@ You can also run without mode flags and it will use the same default folders:
 python main.py --policy strict
 ```
 
-Arguments: (All of these require "python main.py" and then the command in terminal)
+Arguments
 
-- `--text` (required): input text to anonymize.
+- `--text` (required): anonymize input text.
 - `--input-file`: anonymize a single file.
 - `--input-dir`: anonymize files in a directory.
-- `--batch`: process default folders (`data/input` -> `data/output`).
+- `--batch`: process the default folders (`data/input` -> `data/output`).
 - `--ui`: open the desktop UI.
 - `--output-file`: target file for a single-file run.
 - `--output-dir`: target directory for file or directory runs.
@@ -113,12 +103,6 @@ Batch tab highlights:
 - quick button to open the output folder
 
 The UI uses the same pipeline and policies as the CLI, so output files and audit logging stay consistent.
-
-Example output:
-
-- anonymized text in terminal
-- appended rows in `data/audit_log.csv`
-- generated anonymized files and per-file report JSON files in the output directory
 
 ## Policy behavior
 
@@ -169,7 +153,21 @@ Columns:
 - `end_pos`
 - `confidence`
 
-## Roadmap
+## Notes for contributors
+
+- Keep changes small and focused.
+- Prefer local-first processing and explicit auditability.
+
+## Versions
+
+Current implementation notes:
+
+- Text anonymization is implemented.
+- File-based input/output processing is implemented for text files.
+- File type recognition is implemented for routing text, image, audio, and video files.
+- Policies are implemented via a single JSON config file with mode-based thresholds.
+- Audit logging is implemented to `data/audit_log.csv`.
+- Image, video, and audio files are currently routed and reported as not implemented.
 
 Planned next steps:
 
@@ -177,9 +175,3 @@ Planned next steps:
 - Add audio anonymization.
 - Add image anonymization.
 - Add video anonymization.
-
-## Notes for contributors
-
-- Keep changes small and focused.
-- Update this README whenever behavior, CLI arguments, configs, or outputs change.
-- Prefer local-first processing and explicit auditability.

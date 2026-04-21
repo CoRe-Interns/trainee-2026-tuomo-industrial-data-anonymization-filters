@@ -14,9 +14,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_INPUT_DIR = os.path.join(PROJECT_ROOT, "data", "input")
 DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "data", "output")
 
-def load_config(policy_name):
-    return load_policy_config(policy_name)
-
 
 def run_anonymization(input_text, policy_name="light"):
     result_text, raw_results, config = process_text_content(input_text, policy_name)

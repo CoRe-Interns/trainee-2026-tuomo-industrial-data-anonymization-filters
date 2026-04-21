@@ -36,7 +36,12 @@ def load_policy_config(policy_name: str) -> dict:
     with config_path.open("r", encoding="utf-8") as file_handle:
         config = json.load(file_handle)
 
-    thresholds = config.get("thresholds", {})
+    if "entities" not in config:
+        raise KeyError("Policy config missing required field: 'entities'")
+    if "thresholds" not in config:
+        raise KeyError("Policy config missing required field: 'thresholds'")
+
+    thresholds = config["thresholds"]
     if policy_name not in thresholds:
         raise KeyError(f"Unknown policy mode: {policy_name}")
 
@@ -182,22 +187,35 @@ def process_input_file(
         _write_report(report_path, result)
         return result
 
-    source_text = path.read_text(encoding="utf-8", errors="replace")
-    anonymized_text, raw_results, config = process_text_content(source_text, policy_name)
+    try:
+        source_text = path.read_text(encoding="utf-8", errors="replace")
+        anonymized_text, raw_results, config = process_text_content(source_text, policy_name)
 
-    target_output_path.parent.mkdir(parents=True, exist_ok=True)
-    target_output_path.write_text(anonymized_text, encoding="utf-8")
-    log_redaction(raw_results, config["policy_name"])
+        target_output_path.parent.mkdir(parents=True, exist_ok=True)
+        target_output_path.write_text(anonymized_text, encoding="utf-8")
+        log_redaction(raw_results, config["policy_name"])
 
-    result = FileProcessingResult(
-        input_path=str(path),
-        detected_kind=detected_kind,
-        status="processed",
-        policy_name=config["policy_name"],
-        output_path=str(target_output_path),
-        report_path=str(report_path),
-        detections=_serialise_detections(raw_results),
-    )
+        result = FileProcessingResult(
+            input_path=str(path),
+            detected_kind=detected_kind,
+            status="processed",
+            policy_name=config["policy_name"],
+            output_path=str(target_output_path),
+            report_path=str(report_path),
+            detections=_serialise_detections(raw_results),
+        )
+    except Exception as exc:
+        result = FileProcessingResult(
+            input_path=str(path),
+            detected_kind=detected_kind,
+            status="error",
+            policy_name=policy_name,
+            output_path=None,
+            report_path=str(report_path),
+            detections=[],
+            message=f"Error processing file: {exc}",
+        )
+
     _write_report(report_path, result)
     return result
 

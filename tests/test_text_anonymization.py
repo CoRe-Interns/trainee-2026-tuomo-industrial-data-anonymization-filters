@@ -5,7 +5,8 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 from src.anonymizer import AnonymizerTool
-from main import load_config, run_anonymization
+from src.file_pipeline import load_policy_config
+from main import run_anonymization
 
 
 class TextAnonymizationTests(unittest.TestCase):
@@ -225,7 +226,7 @@ class TextAnonymizationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
                 os.chdir(temp_dir)
-                cfg = load_config("light")
+                cfg = load_policy_config("light")
             finally:
                 os.chdir(original_cwd)
 
@@ -234,7 +235,7 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertEqual(cfg["threshold"], 0.4)
 
     def test_load_config_returns_strict_threshold(self):
-        cfg = load_config("strict")
+        cfg = load_policy_config("strict")
 
         self.assertEqual(cfg["policy_name"], "strict")
         self.assertEqual(cfg["threshold"], 0.3)
