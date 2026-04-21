@@ -121,6 +121,22 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertIn("[ID]", anonymized)
         self.assertNotIn("ABC-12345", anonymized)
 
+    def test_strict_policy_masks_worker_style_ids_but_keeps_machine_code(self):
+        tool = AnonymizerTool(
+            entities=["ID"],
+            threshold=0.3,
+            policy_name="strict",
+        )
+
+        text = "Supervisor (EMP-FI-1102) worked with Jari (FI-8821). Maintenance (TECH-12) checked MX-4421."
+        anonymized, _ = tool.process_text(text)
+
+        self.assertNotIn("EMP-FI-1102", anonymized)
+        self.assertNotIn("FI-8821", anonymized)
+        self.assertNotIn("TECH-12", anonymized)
+        self.assertIn("[ID]", anonymized)
+        self.assertIn("MX-4421", anonymized)
+
     def test_light_mode_same_person_gets_same_placeholder(self):
         tool = AnonymizerTool(
             entities=["PERSON"],
@@ -176,6 +192,24 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertNotIn("John Doe", anonymized)
         self.assertNotIn("john.doe@example.com", anonymized)
 
+    def test_strict_mode_masks_repeated_single_name_mentions_after_full_name_detection(self):
+        tool = AnonymizerTool(
+            entities=["PERSON"],
+            threshold=0.3,
+            policy_name="strict",
+        )
+
+        text = (
+            "Supervisor: Jari Lehtonen reviewed alarms. "
+            "Later Jari briefed Pekka Niemi, and Niemi confirmed the update."
+        )
+        anonymized, _ = tool.process_text(text)
+
+        self.assertNotIn("Jari", anonymized)
+        self.assertNotIn("Lehtonen", anonymized)
+        self.assertNotIn("Niemi", anonymized)
+        self.assertGreaterEqual(anonymized.count("[NAME]"), 4)
+
     def test_strict_policy_masks_high_risk_structured_entities(self):
         tool = AnonymizerTool(
             entities=["CREDIT_CARD", "IBAN_CODE", "IP_ADDRESS"],
@@ -220,6 +254,20 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertIn("[NAME3]", anonymized)
         self.assertLess(anonymized.index("[NAME1]"), anonymized.index("[NAME2]"))
         self.assertLess(anonymized.index("[NAME2]"), anonymized.index("[NAME3]"))
+
+    def test_light_mode_masks_full_name_span_without_leaking_first_name(self):
+        tool = AnonymizerTool(
+            entities=["PERSON"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Coffee break. Mikko Saarinen left early."
+        anonymized, _ = tool.process_text(text)
+
+        self.assertNotIn("Mikko", anonymized)
+        self.assertNotIn("Saarinen", anonymized)
+        self.assertIn("[NAME1]", anonymized)
 
     def test_load_config_works_outside_repo_cwd(self):
         original_cwd = os.getcwd()

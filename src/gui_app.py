@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 import subprocess
 import sys
@@ -196,7 +197,8 @@ class AnonymizationApp(tk.Tk):
         action_row.grid(row=4, column=1, sticky="w")
         ttk.Button(action_row, text="Run Folder Batch", command=self._run_folder_batch).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(action_row, text="Reset Defaults", command=self._reset_default_folders).grid(row=0, column=1)
-        ttk.Button(action_row, text="Open Output Folder", command=self._open_output_folder).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(action_row, text="Open Input Folder", command=self._open_input_folder).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(action_row, text="Open Output Folder", command=self._open_output_folder).grid(row=0, column=3, padx=(8, 0))
 
         summary_frame = ttk.LabelFrame(self.batch_tab, text="Batch Summary", padding=10)
         summary_frame.grid(row=5, column=1, sticky="ew", pady=(16, 8))
@@ -272,11 +274,13 @@ class AnonymizationApp(tk.Tk):
         folder = filedialog.askdirectory(initialdir=self.batch_input_var.get() or str(DEFAULT_INPUT_DIR))
         if folder:
             self.batch_input_var.set(folder)
+            self._set_status(f"Input folder set: {folder}")
 
     def _choose_output_folder(self) -> None:
         folder = filedialog.askdirectory(initialdir=self.batch_output_var.get() or str(DEFAULT_OUTPUT_DIR))
         if folder:
             self.batch_output_var.set(folder)
+            self._set_status(f"Output folder set: {folder}")
 
     def _reset_default_folders(self) -> None:
         self.batch_input_var.set(str(DEFAULT_INPUT_DIR))
@@ -300,7 +304,7 @@ class AnonymizationApp(tk.Tk):
         self._set_text_output(result_text)
         self._set_status(f"Text anonymized with {config['policy_name']} policy ({len(results)} detections)")
         self._append_log(
-            f"TEXT | policy={config['policy_name']} | detections={len(results)} | output={result_text[:120]}"
+            f"TEXT | policy={config['policy_name']} | detections={len(results)} | output={result_text}"
         )
 
     def _run_folder_batch(self) -> None:
@@ -400,6 +404,7 @@ class AnonymizationApp(tk.Tk):
 
         index = int(selection[0])
         if 0 <= index < len(self.batch_results):
+            self._set_status(f"Selected result: {self.batch_results[index].input_path}")
             self._show_batch_detail(build_result_detail(self.batch_results[index]))
 
     def _show_batch_detail(self, value: str) -> None:
@@ -412,12 +417,29 @@ class AnonymizationApp(tk.Tk):
         folder = Path(self.batch_output_var.get()).expanduser()
         if not folder.exists():
             messagebox.showinfo("Folder missing", f"Output folder does not exist yet: {folder}")
+            self._set_status(f"Output folder missing: {folder}")
             return
 
         try:
             open_folder(folder)
+            self._set_status(f"Opened output folder: {folder}")
         except Exception as exc:  # pragma: no cover - platform/file-manager path
             messagebox.showerror("Unable to open folder", str(exc))
+            self._set_status(f"Failed to open output folder: {folder}")
+
+    def _open_input_folder(self) -> None:
+        folder = Path(self.batch_input_var.get()).expanduser()
+        if not folder.exists():
+            messagebox.showinfo("Folder missing", f"Input folder does not exist: {folder}")
+            self._set_status(f"Input folder missing: {folder}")
+            return
+
+        try:
+            open_folder(folder)
+            self._set_status(f"Opened input folder: {folder}")
+        except Exception as exc:  # pragma: no cover - platform/file-manager path
+            messagebox.showerror("Unable to open folder", str(exc))
+            self._set_status(f"Failed to open input folder: {folder}")
 
     def _set_text_output(self, value: str) -> None:
         self.text_output.configure(state="normal")
@@ -426,8 +448,9 @@ class AnonymizationApp(tk.Tk):
         self.text_output.configure(state="disabled")
 
     def _append_log(self, value: str) -> None:
+        timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.configure(state="normal")
-        self.log_text.insert(tk.END, value + "\n")
+        self.log_text.insert(tk.END, f"[{timestamp}] {value}\n")
         self.log_text.see(tk.END)
         self.log_text.configure(state="disabled")
 

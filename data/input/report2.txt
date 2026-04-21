@@ -1,0 +1,15 @@
+PAGE 2 — SHIFT B REPORT (14:00–22:00)
+
+Supervisor: Elina Rantanen (EMP-FI-2291)
+Date: 2026-03-03
+
+Took over from Kari at 14:00. He mentioned “keep an eye on 4421.”
+14:25 — Olli Mäkinen (INSP-91) flagged batch B-77830 for surface defects. Photos saved on shared drive under /quality/olli/.
+15:10 — New operator, Sami Korpela (FI-9912), started training on L3. Needed repeated guidance, especially safety steps.
+16:45 — Oil leak noticed again near PR-0091. Same spot as yesterday per Mikko’s earlier message on WhatsApp group.
+18:00 — Dinner break.
+19:20 — Small incident: Sami almost bypassed guard sensor. Anna intervened quickly. No official report filed.
+21:50 — All lines stable at shift end.
+
+Additional comment:
+Sami may need closer supervision. Consider extending training period.

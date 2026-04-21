@@ -1,0 +1,16 @@
+PAGE 1 — SHIFT A REPORT (06:00–14:00)
+
+Supervisor: Kari Niemelä (EMP-FI-1102)
+Date: 2026-03-03
+Plant: Turku-A
+
+06:05 — Started Line L1 with Jari Lehtonen (FI-8821) on MX-4421. Machine sounded slightly off but within tolerance.
+06:47 — Emergency stop triggered. Jari said he heard a “metallic knock” before shutdown. Logged under incident INC-9012.
+07:20 — Anna Virtanen (FI-7742) reported L2 running fine, output steady ~210 units/hour.
+08:10 — Coffee break. Mikko Saarinen left early, said he had a headache (not logged officially).
+09:35 — Maintenance (Pekka Niemi, TECH-12) checked MX-4421, replaced fan unit.
+11:50 — Minor disagreement between Jari and Pekka about root cause (“operator misuse” vs “old equipment”).
+13:30 — Line L1 resumed. Output slightly below target.
+
+End of shift notes:
+We’re seeing repeated issues with MX-4421 over past week. Recommend deeper inspection. Jari mentioned similar noise last Friday but didn’t file report.

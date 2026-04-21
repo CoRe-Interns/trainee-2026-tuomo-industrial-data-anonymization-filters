@@ -1,6 +1,6 @@
 import re
 
-from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
+from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerResult
 
 class AnonymizerTool:
     def __init__(self, entities, threshold, policy_name="light", language="en"):
@@ -43,6 +43,13 @@ class AnonymizerTool:
                     name="generic_id_marker",
                     regex=r"(?i)\b(?:id|badge\s*id|employee\s*id)\s*[:=#-]\s*[A-Z0-9][A-Z0-9-]{2,19}\b",
                     score=0.88,
+                ),
+                Pattern(
+                    name="worker_style_id_token",
+                    regex=(
+                        r"(?<![A-Z0-9-])(?:EMP-[A-Z]{2}-\d{3,6}|FI-\d{3,6}|TECH-\d{2,6})(?![A-Z0-9-])"
+                    ),
+                    score=0.9,
                 )
             ],
         )
@@ -145,6 +152,8 @@ class AnonymizerTool:
                     continue
             results.append(result)
 
+        results = self._expand_person_to_neighboring_full_name(text, results)
+        results = self._expand_person_name_references(text, results)
         results = self._dedupe_overlaps(results)
 
         # 2. Apply deterministic pseudonyms. Different persons get different tags.
@@ -170,6 +179,138 @@ class AnonymizerTool:
                 selected.append(candidate)
 
         return sorted(selected, key=lambda r: (r.start, r.end))
+
+    @staticmethod
+    def _expand_person_name_references(text, results):
+        stop_tokens = {
+            "name",
+            "full",
+            "contact",
+            "operator",
+            "technician",
+            "employee",
+            "manager",
+            "supervisor",
+            "attn",
+            "email",
+            "phone",
+            "badge",
+            "id",
+        }
+
+        known_name_tokens = set()
+        for result in results:
+            if result.entity_type != "PERSON":
+                continue
+
+            span_text = text[result.start:result.end]
+
+            # Avoid amplifying labeled field detections like "Name=John Doe".
+            prefix = text[max(0, result.start - 20):result.start].lower()
+            if any(marker in prefix for marker in ["name=", "name:", "contact name", "full name", "supervisor:", "operator:", "manager:", "technician:"]):
+                continue
+
+            tokens = re.findall(r"[^\W\d_]+", span_text)
+            if len(tokens) < 2:
+                continue
+
+            for token in tokens:
+                if len(token) < 3:
+                    continue
+                lowered = token.lower()
+                if lowered in stop_tokens:
+                    continue
+                if not token[0].isupper():
+                    continue
+                known_name_tokens.add(token)
+
+        if not known_name_tokens:
+            return results
+
+        selected = list(results)
+        for token in sorted(known_name_tokens, key=len, reverse=True):
+            pattern = re.compile(rf"(?<![\w]){re.escape(token)}(?![\w])")
+            for match in pattern.finditer(text):
+                start, end = match.span()
+                overlaps = any(
+                    not (end <= existing.start or start >= existing.end)
+                    for existing in selected
+                )
+                if overlaps:
+                    continue
+
+                selected.append(
+                    RecognizerResult(
+                        entity_type="PERSON",
+                        start=start,
+                        end=end,
+                        score=0.79,
+                    )
+                )
+
+        return selected
+
+    @staticmethod
+    def _expand_person_to_neighboring_full_name(text, results):
+        stop_tokens = {
+            "name",
+            "full",
+            "contact",
+            "operator",
+            "technician",
+            "employee",
+            "manager",
+            "supervisor",
+            "attn",
+            "email",
+            "phone",
+            "badge",
+            "id",
+        }
+
+        def is_name_token(token):
+            if len(token) < 2:
+                return False
+            if token.lower() in stop_tokens:
+                return False
+            return token[0].isupper() and all(ch.isalpha() or ch in "-'" for ch in token)
+
+        expanded = []
+        for result in results:
+            if result.entity_type != "PERSON":
+                expanded.append(result)
+                continue
+
+            span_text = text[result.start:result.end]
+            token_match = re.fullmatch(r"[^\W\d_]+", span_text)
+            if not token_match:
+                expanded.append(result)
+                continue
+
+            start = result.start
+            end = result.end
+
+            prev_match = re.search(r"([^\W\d_]+)\s+$", text[:start])
+            if prev_match and is_name_token(prev_match.group(1)):
+                start = prev_match.start(1)
+
+            next_match = re.match(r"^\s+([^\W\d_]+)", text[end:])
+            if next_match and is_name_token(next_match.group(1)):
+                end = end + next_match.end(1)
+
+            if start != result.start or end != result.end:
+                expanded.append(
+                    RecognizerResult(
+                        entity_type="PERSON",
+                        start=start,
+                        end=end,
+                        score=max(result.score, 0.86),
+                    )
+                )
+            else:
+                expanded.append(result)
+
+        return expanded
 
     def _apply_pseudonyms(self, text, results):
         placeholder_maps = {}
