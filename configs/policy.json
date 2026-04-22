@@ -14,5 +14,19 @@
         "light": 0.4,
         "strict": 0.3
     },
-    "language": "en"
+    "language": "en",
+    "audio": {
+        "mask_mode": "spoken_label",
+        "sidecar_extension": ".words.json",
+        "padding_ms": 90,
+        "duck_db": 16.0,
+        "placeholder_labels": {
+            "PERSON": "name",
+            "LOCATION": "location",
+            "ID": "id",
+            "EMAIL_ADDRESS": "email",
+            "PHONE_NUMBER": "phone number",
+            "default": "redacted"
+        }
+    }
 }

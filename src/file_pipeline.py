@@ -8,6 +8,11 @@ from typing import Iterable
 
 from src.anonymizer import AnonymizerTool
 from src.logger import log_redaction
+from src.modalities.audio.audio_pipeline import (
+    process_audio_with_sidecar,
+    resolve_audio_output_path,
+    resolve_audio_sidecar_path,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -50,6 +55,7 @@ def load_policy_config(policy_name: str) -> dict:
         "entities": config["entities"],
         "threshold": thresholds[policy_name],
         "language": config.get("language", "en"),
+        "audio": config.get("audio", {}),
     }
 
 
@@ -107,6 +113,36 @@ def _serialise_detections(results) -> list[dict[str, object]]:
         }
         for result in results
     ]
+
+
+def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str]]:
+    audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
+    sidecar_extension = audio_cfg.get("sidecar_extension", ".words.json")
+    padding_ms = int(audio_cfg.get("padding_ms", 90))
+    duck_db = float(audio_cfg.get("duck_db", 16.0))
+    labels = audio_cfg.get(
+        "placeholder_labels",
+        {
+            "PERSON": "name",
+            "LOCATION": "location",
+            "ID": "id",
+            "EMAIL_ADDRESS": "email",
+            "PHONE_NUMBER": "phone number",
+            "default": "redacted",
+        },
+    )
+
+    if not isinstance(sidecar_extension, str) or not sidecar_extension:
+        raise ValueError("Audio policy sidecar_extension must be a non-empty string")
+    if not isinstance(labels, dict):
+        raise ValueError("Audio policy placeholder_labels must be an object")
+
+    labels_normalized: dict[str, str] = {
+        str(key): str(value)
+        for key, value in labels.items()
+    }
+
+    return sidecar_extension, padding_ms, duck_db, labels_normalized
 
 
 def _anonymized_filename(file_path: Path) -> str:
@@ -173,7 +209,7 @@ def process_input_file(
     target_output_path = _derive_output_path(path, output_path=output_path, output_dir=output_dir, input_root=input_root)
     report_path = _derive_report_path(path, output_path=Path(target_output_path) if target_output_path else None, output_dir=output_dir, input_root=input_root)
 
-    if detected_kind != "text":
+    if detected_kind not in {"text", "audio"}:
         result = FileProcessingResult(
             input_path=str(path),
             detected_kind=detected_kind,
@@ -188,22 +224,76 @@ def process_input_file(
         return result
 
     try:
-        source_text = path.read_text(encoding="utf-8", errors="replace")
-        anonymized_text, raw_results, config = process_text_content(source_text, policy_name)
+        if detected_kind == "text":
+            source_text = path.read_text(encoding="utf-8", errors="replace")
+            anonymized_text, raw_results, config = process_text_content(source_text, policy_name)
 
-        target_output_path.parent.mkdir(parents=True, exist_ok=True)
-        target_output_path.write_text(anonymized_text, encoding="utf-8")
-        log_redaction(raw_results, config["policy_name"])
+            target_output_path.parent.mkdir(parents=True, exist_ok=True)
+            target_output_path.write_text(anonymized_text, encoding="utf-8")
+            log_redaction(raw_results, config["policy_name"])
 
-        result = FileProcessingResult(
-            input_path=str(path),
-            detected_kind=detected_kind,
-            status="processed",
-            policy_name=config["policy_name"],
-            output_path=str(target_output_path),
-            report_path=str(report_path),
-            detections=_serialise_detections(raw_results),
-        )
+            result = FileProcessingResult(
+                input_path=str(path),
+                detected_kind=detected_kind,
+                status="processed",
+                policy_name=config["policy_name"],
+                output_path=str(target_output_path),
+                report_path=str(report_path),
+                detections=_serialise_detections(raw_results),
+            )
+        else:
+            if path.suffix.lower() != ".wav":
+                result = FileProcessingResult(
+                    input_path=str(path),
+                    detected_kind=detected_kind,
+                    status="skipped",
+                    policy_name=policy_name,
+                    output_path=None,
+                    report_path=str(report_path),
+                    detections=[],
+                    message="audio processing currently supports only .wav files",
+                )
+                _write_report(report_path, result)
+                return result
+
+            tool, config = build_anonymizer(policy_name)
+            sidecar_extension, padding_ms, duck_db, labels = _audio_sidecar_config(config)
+
+            output_audio_path = resolve_audio_output_path(path, target_output_path)
+            report_path = output_audio_path.with_name(_report_filename(output_audio_path))
+            sidecar_path = resolve_audio_sidecar_path(path, sidecar_extension=sidecar_extension)
+
+            detections, message = process_audio_with_sidecar(
+                audio_path=path,
+                output_audio_path=output_audio_path,
+                sidecar_path=sidecar_path,
+                anonymizer_tool=tool,
+                padding_ms=padding_ms,
+                duck_db=duck_db,
+                labels=labels,
+            )
+
+            if message is not None:
+                result = FileProcessingResult(
+                    input_path=str(path),
+                    detected_kind=detected_kind,
+                    status="skipped",
+                    policy_name=config["policy_name"],
+                    output_path=None,
+                    report_path=str(report_path),
+                    detections=[],
+                    message=message,
+                )
+            else:
+                result = FileProcessingResult(
+                    input_path=str(path),
+                    detected_kind=detected_kind,
+                    status="processed",
+                    policy_name=config["policy_name"],
+                    output_path=str(output_audio_path),
+                    report_path=str(report_path),
+                    detections=detections,
+                )
     except Exception as exc:
         result = FileProcessingResult(
             input_path=str(path),

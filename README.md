@@ -14,6 +14,12 @@ The current implementation focuses on text anonymization with policy-based behav
 |-- src/
 |   |-- anonymizer.py          # Presidio + custom recognizers
 |   |-- file_pipeline.py       # File routing and text file processing
+|   |-- modalities/
+|   |   `-- audio/
+|   |      |-- audio_pipeline.py     # Audio processing orchestration
+|   |      |-- transcript_mapping.py # Text-span to time-span mapping
+|   |      |-- tts_overlay.py        # Spoken placeholder synthesis + overlay
+|   |      `-- wav_ops.py            # WAV read/write and ducking operations
 |   `-- logger.py              # Audit log writer
 |-- tests/
 |   |-- test_text_anonymization.py
@@ -46,6 +52,12 @@ Process a single file:
 
 ```bash
 python main.py --input-file data/input/sample.txt --output-file data/output/sample.anonymized.txt --policy strict
+```
+
+Process audio (WAV + sidecar transcript):
+
+```bash
+python main.py --input-file data/input/shift.wav --output-dir data/output --policy strict
 ```
 
 Process a directory:
@@ -103,6 +115,47 @@ Batch tab highlights:
 - quick button to open the output folder
 
 The UI uses the same pipeline and policies as the CLI, so output files and audit logging stay consistent.
+
+## Audio anonymization (WAV)
+
+Audio anonymization is implemented as audio-to-audio masking for `.wav` files.
+
+- Input audio remains audio and produces anonymized `.wav` output.
+- Sensitive spoken content is replaced by spoken placeholder labels (for example `name`, `location`, `email`).
+- Original voice is ducked under detected redaction intervals.
+- Processing currently requires a timestamped sidecar transcript file next to the audio.
+
+Required sidecar naming:
+
+- `shift.wav` -> `shift.words.json`
+
+Sidecar JSON format:
+
+```json
+{
+  "text": "Email: john.doe@example.com",
+  "words": [
+    {
+      "text": "Email:",
+      "start_char": 0,
+      "end_char": 6,
+      "start_time_s": 0.0,
+      "end_time_s": 0.25
+    },
+    {
+      "text": "john.doe@example.com",
+      "start_char": 7,
+      "end_char": 27,
+      "start_time_s": 0.25,
+      "end_time_s": 0.9
+    }
+  ]
+}
+```
+
+Current limitation:
+
+- Non-WAV audio formats are detected but skipped with a clear status message.
 
 ## Policy behavior
 
@@ -170,7 +223,8 @@ Current implementation notes:
 - File type recognition is implemented for routing text, image, audio, and video files.
 - Policies are implemented via a single JSON config file with mode-based thresholds.
 - Audit logging is implemented to `data/audit_log.csv`.
-- Image, video, and audio files are currently routed and reported as not implemented.
+- Audio anonymization is implemented for `.wav` files with timestamped sidecar transcripts and spoken placeholder masking.
+- Image and video files are currently routed and reported as not implemented.
 
 Planned next steps:
 
