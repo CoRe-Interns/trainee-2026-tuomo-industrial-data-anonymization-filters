@@ -31,6 +31,12 @@
       "confidence": 0.78
     },
     {
+      "entity_type": "ID",
+      "start_pos": 186,
+      "end_pos": 193,
+      "confidence": 0.9
+    },
+    {
       "entity_type": "PERSON",
       "start_pos": 311,
       "end_pos": 323,
