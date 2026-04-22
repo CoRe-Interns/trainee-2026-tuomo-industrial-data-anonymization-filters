@@ -47,7 +47,7 @@ class AnonymizerTool:
                 Pattern(
                     name="worker_style_id_token",
                     regex=(
-                        r"(?<![A-Z0-9-])(?:EMP-[A-Z]{2}-\d{3,6}|FI-\d{3,6}|TECH-\d{2,6})(?![A-Z0-9-])"
+                        r"(?<![A-Z0-9-])(?:EMP-[A-Z]{2}-\d{3,6}|FI-\d{3,6}|TECH-\d{2,6}|INSP-\d{2,6})(?![A-Z0-9-])"
                     ),
                     score=0.9,
                 )

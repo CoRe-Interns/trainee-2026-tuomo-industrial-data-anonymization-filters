@@ -78,6 +78,10 @@ def build_result_detail(result: FileProcessingResult, preview_chars: int = 900) 
     return "\n".join(lines)
 
 
+def get_text_tab_expand_rows() -> tuple[int, int]:
+    return (1, 3)
+
+
 def open_folder(path: str | Path) -> None:
     folder = Path(path)
     if not folder.exists():
@@ -137,7 +141,9 @@ class AnonymizationApp(tk.Tk):
 
     def _build_text_tab(self) -> None:
         self.text_tab.columnconfigure(1, weight=1)
-        self.text_tab.rowconfigure(1, weight=1)
+        input_row, output_row = get_text_tab_expand_rows()
+        self.text_tab.rowconfigure(input_row, weight=1)
+        self.text_tab.rowconfigure(output_row, weight=1)
 
         ttk.Label(self.text_tab, text="Policy").grid(row=0, column=0, sticky="w")
         policy_box = ttk.Combobox(

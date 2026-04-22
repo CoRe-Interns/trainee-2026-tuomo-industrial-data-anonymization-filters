@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from src.anonymizer import AnonymizerTool
 from src.file_pipeline import load_policy_config
 from main import run_anonymization
+from tests.run_text_anonymization_cases import run_cases
 
 
 class TextAnonymizationTests(unittest.TestCase):
@@ -136,6 +137,20 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertNotIn("TECH-12", anonymized)
         self.assertIn("[ID]", anonymized)
         self.assertIn("MX-4421", anonymized)
+
+    def test_strict_policy_masks_insp_worker_id_but_keeps_batch_code(self):
+        tool = AnonymizerTool(
+            entities=["PERSON", "ID"],
+            threshold=0.3,
+            policy_name="strict",
+        )
+
+        text = "14:25 - Olli Mäkinen (INSP-91) flagged batch B-77830"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertNotIn("INSP-91", anonymized)
+        self.assertIn("[ID]", anonymized)
+        self.assertIn("B-77830", anonymized)
 
     def test_light_mode_same_person_gets_same_placeholder(self):
         tool = AnonymizerTool(
@@ -287,6 +302,15 @@ class TextAnonymizationTests(unittest.TestCase):
 
         self.assertEqual(cfg["policy_name"], "strict")
         self.assertEqual(cfg["threshold"], 0.3)
+
+    def test_sample_case_runner_uses_shared_policy_config(self):
+        output = StringIO()
+        with redirect_stdout(output):
+            run_cases("strict")
+
+        printed = output.getvalue()
+        self.assertIn("CASE 1", printed)
+        self.assertIn("ANON :", printed)
 
 
 if __name__ == "__main__":

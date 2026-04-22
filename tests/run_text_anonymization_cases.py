@@ -1,20 +1,15 @@
-import json
-import os
+import sys
+from pathlib import Path
 
-from src.anonymizer import AnonymizerTool
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.file_pipeline import build_anonymizer
 
 
 def run_cases(policy_name="strict"):
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(project_root, "configs", f"{policy_name}.json")
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-
-    tool = AnonymizerTool(
-        entities=cfg["entities"],
-        threshold=cfg["threshold"],
-        policy_name=policy_name,
-    )
+    tool, _ = build_anonymizer(policy_name)
 
     samples = [
         "Operator: John Carter | Site: Helsinki Plant | Email: john.carter@acme.com | Phone: +358401234567",

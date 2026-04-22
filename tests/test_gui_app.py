@@ -1,7 +1,12 @@
 import unittest
 
 from src.file_pipeline import FileProcessingResult
-from src.gui_app import build_result_detail, format_result_line, summarize_results
+from src.gui_app import (
+    build_result_detail,
+    format_result_line,
+    get_text_tab_expand_rows,
+    summarize_results,
+)
 
 
 class GuiHelpersTests(unittest.TestCase):
@@ -59,3 +64,9 @@ class GuiHelpersTests(unittest.TestCase):
         self.assertIn("Output: sample.anonymized.txt", detail)
         self.assertIn("Report: sample.report.json", detail)
         self.assertIn("Message: ok", detail)
+
+    def test_text_tab_expand_rows_include_input_and_output(self):
+        input_row, output_row = get_text_tab_expand_rows()
+
+        self.assertEqual(input_row, 1)
+        self.assertEqual(output_row, 3)

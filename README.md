@@ -116,6 +116,7 @@ The UI uses the same pipeline and policies as the CLI, so output files and audit
   - higher threshold than strict policy
 - `strict` policy:
   - anonymizes detected values with generic non-indexed placeholders (for example `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ID]`)
+  - detects worker-style IDs such as `EMP-FI-1102`, `FI-8821`, `TECH-12`, and `INSP-91`
   - lower threshold for broader detection
 
 Policy files:
@@ -137,6 +138,8 @@ Run sample text cases:
 ```bash
 python tests/run_text_anonymization_cases.py
 ```
+
+The sample case runner uses the same shared policy loader as CLI and UI and reads mode thresholds from `configs/policy.json`.
 
 ## Output and audit log format
 
