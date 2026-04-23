@@ -1,13 +1,15 @@
 import argparse
 import os
+from pathlib import Path
 
 from src.file_pipeline import (
     FileProcessingResult,
-    load_policy_config,
+    detect_file_kind,
     process_input_directory,
     process_input_file,
     process_text_content,
 )
+from src.modalities.audio.conversion import ensure_ffmpeg_available
 from src.logger import log_redaction
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -37,6 +39,28 @@ def _print_file_result(result: FileProcessingResult):
     if result.message:
         print(f"Message: {result.message}")
     print("-------------------\n")
+
+
+def _run_ffmpeg_preflight_for_inputs(policy_name: str, input_paths: list[str]) -> None:
+    needs_audio = any(detect_file_kind(path) == "audio" for path in input_paths)
+    if not needs_audio:
+        return
+
+    try:
+        ensure_ffmpeg_available()
+    except RuntimeError as exc:
+        raise ValueError(
+            f"{exc}. Install ffmpeg before processing audio files"
+        )
+
+
+def _collect_input_files(input_dir: str, recursive: bool) -> list[str]:
+    root = Path(input_dir)
+    if not root.exists():
+        return []
+
+    iterator = root.rglob("*") if recursive else root.iterdir()
+    return [str(path) for path in iterator if path.is_file()]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run text anonymization")
@@ -75,6 +99,14 @@ if __name__ == "__main__":
         if not os.path.isdir(DEFAULT_INPUT_DIR):
             parser.error(f"Default input folder does not exist: {DEFAULT_INPUT_DIR}")
 
+        try:
+            _run_ffmpeg_preflight_for_inputs(
+                policy_name=args.policy,
+                input_paths=_collect_input_files(DEFAULT_INPUT_DIR, recursive=True),
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+
         output_dir = args.output_dir or DEFAULT_OUTPUT_DIR
         os.makedirs(output_dir, exist_ok=True)
 
@@ -91,6 +123,11 @@ if __name__ == "__main__":
     elif args.text is not None:
         run_anonymization(input_text=args.text, policy_name=args.policy)
     elif args.input_file is not None:
+        try:
+            _run_ffmpeg_preflight_for_inputs(policy_name=args.policy, input_paths=[args.input_file])
+        except ValueError as exc:
+            parser.error(str(exc))
+
         result = process_input_file(
             args.input_file,
             policy_name=args.policy,
@@ -99,6 +136,14 @@ if __name__ == "__main__":
         )
         _print_file_result(result)
     else:
+        try:
+            _run_ffmpeg_preflight_for_inputs(
+                policy_name=args.policy,
+                input_paths=_collect_input_files(args.input_dir, recursive=args.recursive),
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+
         results = process_input_directory(
             args.input_dir,
             policy_name=args.policy,

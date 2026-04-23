@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.file_pipeline import detect_file_kind, process_input_directory, process_input_file
+from src.modalities.audio.speech_to_text import TranscriptToken, WhisperTranscript
 from src.modalities.audio.wav_ops import WavData
 
 
@@ -20,29 +21,6 @@ def _write_silent_wav(path: Path, frame_rate: int = 16000, duration_s: float = 1
         handle.writeframes(frames)
 
 
-def _write_audio_sidecar(path: Path) -> None:
-    payload = {
-        "text": "Email: john.doe@example.com",
-        "words": [
-            {
-                "text": "Email:",
-                "start_char": 0,
-                "end_char": 6,
-                "start_time_s": 0.0,
-                "end_time_s": 0.25,
-            },
-            {
-                "text": "john.doe@example.com",
-                "start_char": 7,
-                "end_char": 27,
-                "start_time_s": 0.25,
-                "end_time_s": 0.9,
-            },
-        ],
-    }
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-
 def _fake_synthesize_label_clip(_label: str, target: WavData) -> WavData:
     frame_count = int(target.frame_rate * 0.25)
     sample_value = 1200
@@ -52,7 +30,6 @@ def _fake_synthesize_label_clip(_label: str, target: WavData) -> WavData:
     elif target.sample_width == 1:
         sample_bytes = bytes([128 + min(sample_value // 10, 100)])
     else:
-        # Keep fallback deterministic for uncommon widths in tests.
         sample_bytes = b"\x00" * target.sample_width
 
     frame_bytes = sample_bytes * target.channels
@@ -61,6 +38,28 @@ def _fake_synthesize_label_clip(_label: str, target: WavData) -> WavData:
         sample_width=target.sample_width,
         frame_rate=target.frame_rate,
         frames=frame_bytes * frame_count,
+    )
+
+
+def _fake_transcribe_audio_with_whisper(*_args, **_kwargs) -> WhisperTranscript:
+    return WhisperTranscript(
+        text="Email john.doe@example.com",
+        tokens=[
+            TranscriptToken(
+                text="Email",
+                start_char=0,
+                end_char=5,
+                start_time_s=0.0,
+                end_time_s=0.2,
+            ),
+            TranscriptToken(
+                text="john.doe@example.com",
+                start_char=6,
+                end_char=26,
+                start_time_s=0.2,
+                end_time_s=0.9,
+            ),
+        ],
     )
 
 
@@ -122,16 +121,16 @@ class FilePipelineTests(unittest.TestCase):
             self.assertEqual(skipped_report["status"], "skipped")
             self.assertIn("not implemented yet", skipped_report["message"])
 
+    @patch("src.file_pipeline.ensure_ffmpeg_available")
+    @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
     @patch("src.modalities.audio.audio_pipeline.synthesize_label_clip", side_effect=_fake_synthesize_label_clip)
-    def test_process_audio_file_with_sidecar_writes_anonymized_wav_and_report(self, _mock_synth):
+    def test_process_audio_file_writes_anonymized_wav_and_report(self, _mock_synth, _mock_transcribe, _mock_ffmpeg):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             audio_file = root / "shift.wav"
-            sidecar_file = root / "shift.words.json"
             output_dir = root / "output"
 
             _write_silent_wav(audio_file)
-            _write_audio_sidecar(sidecar_file)
 
             result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
 
@@ -154,52 +153,26 @@ class FilePipelineTests(unittest.TestCase):
             output_bytes = Path(result.output_path).read_bytes()
             self.assertNotEqual(input_bytes, output_bytes)
 
-    def test_process_audio_file_without_sidecar_is_skipped(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            audio_file = root / "shift.wav"
-            output_dir = root / "output"
-            _write_silent_wav(audio_file)
-
-            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
-
-            self.assertEqual(result.status, "skipped")
-            self.assertEqual(result.detected_kind, "audio")
-            self.assertIsNone(result.output_path)
-            self.assertIsNotNone(result.report_path)
-            self.assertIn("sidecar transcript not found", result.message or "")
-
-    def test_process_non_wav_audio_file_is_skipped(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            audio_file = root / "voice.mp3"
-            output_dir = root / "output"
-            audio_file.write_bytes(b"not-real-mp3-data")
-
-            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
-
-            # Phase 2 enables conversion by default; without ffmpeg this becomes an error path.
-            self.assertIn(result.status, {"processed", "error", "skipped"})
-            self.assertEqual(result.detected_kind, "audio")
-
+    @patch("src.file_pipeline.ensure_ffmpeg_available")
     @patch("src.file_pipeline.transcode_wav_to_audio")
     @patch("src.file_pipeline.convert_audio_to_wav")
+    @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
     @patch("src.modalities.audio.audio_pipeline.synthesize_label_clip", side_effect=_fake_synthesize_label_clip)
     def test_process_non_wav_audio_file_uses_conversion_when_enabled(
         self,
         _mock_synth,
+        _mock_transcribe,
         mock_convert,
         mock_transcode,
+        _mock_ffmpeg,
     ):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             audio_file = root / "voice.mp3"
-            sidecar_file = root / "voice.words.json"
             output_dir = root / "output"
             converted_wav = root / "voice.converted.wav"
 
             audio_file.write_bytes(b"not-real-mp3-data")
-            _write_audio_sidecar(sidecar_file)
             _write_silent_wav(converted_wav)
 
             mock_convert.return_value = converted_wav
@@ -220,8 +193,9 @@ class FilePipelineTests(unittest.TestCase):
             self.assertTrue(mock_convert.called)
             self.assertTrue(mock_transcode.called)
 
+    @patch("src.file_pipeline.ensure_ffmpeg_available")
     @patch("src.file_pipeline.load_policy_config")
-    def test_process_non_wav_audio_file_is_skipped_when_conversion_disabled(self, mock_load_config):
+    def test_process_non_wav_audio_file_is_skipped_when_conversion_disabled(self, mock_load_config, _mock_ffmpeg):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             audio_file = root / "voice.mp3"
@@ -234,10 +208,11 @@ class FilePipelineTests(unittest.TestCase):
                 "threshold": 0.3,
                 "language": "en",
                 "audio": {
-                    "sidecar_extension": ".words.json",
                     "padding_ms": 90,
                     "duck_db": 16.0,
                     "enable_format_conversion": False,
+                    "whisper_model": "base",
+                    "whisper_language": "en",
                     "placeholder_labels": {
                         "PERSON": "name",
                         "default": "redacted",
@@ -249,4 +224,4 @@ class FilePipelineTests(unittest.TestCase):
 
             self.assertEqual(result.status, "skipped")
             self.assertEqual(result.detected_kind, "audio")
-            self.assertIn("enable format conversion", result.message or "")
+            self.assertIn("format conversion", result.message or "")

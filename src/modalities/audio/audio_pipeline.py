@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
-from src.modalities.audio.transcript_mapping import (
+from src.modalities.audio.speech_to_text import (
     IntervalWithLabel,
     apply_padding,
-    extract_tokens_from_sidecar,
     map_text_span_to_time_interval,
     merge_intervals,
+    transcribe_audio_with_whisper,
 )
 from src.modalities.audio.tts_overlay import overlay_clip, synthesize_label_clip
 from src.modalities.audio.wav_ops import WavInterval, duck_intervals, read_wav, write_wav
-
-
-def resolve_audio_sidecar_path(audio_path: str | Path, sidecar_extension: str = ".words.json") -> Path:
-    input_path = Path(audio_path)
-    return input_path.with_suffix(sidecar_extension)
 
 
 def resolve_audio_output_path(input_path: str | Path, output_path: str | Path) -> Path:
@@ -51,25 +44,25 @@ def _serialise_audio_detection(entity_type: str, start_time_s: float, end_time_s
     }
 
 
-def process_audio_with_sidecar(
+def process_audio_with_whisper(
     audio_path: str | Path,
     output_audio_path: str | Path,
-    sidecar_path: str | Path,
     anonymizer_tool,
+    whisper_model: str,
+    whisper_language: str | None,
     padding_ms: int,
     duck_db: float,
     labels: dict[str, str],
 ) -> tuple[list[dict[str, object]], str | None]:
     audio = read_wav(audio_path)
 
-    sidecar_file = Path(sidecar_path)
-    if not sidecar_file.exists():
-        return [], f"audio sidecar transcript not found: {sidecar_file}"
-
-    with sidecar_file.open("r", encoding="utf-8") as handle:
-        payload: dict[str, Any] = json.load(handle)
-
-    full_text, tokens = extract_tokens_from_sidecar(payload)
+    transcript = transcribe_audio_with_whisper(
+        audio_path=audio_path,
+        model_name=whisper_model,
+        language=whisper_language,
+    )
+    full_text = transcript.text
+    tokens = transcript.tokens
 
     _, raw_results = anonymizer_tool.process_text(full_text)
 

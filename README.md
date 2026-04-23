@@ -18,7 +18,7 @@ The current implementation focuses on text anonymization with policy-based behav
 |   |   `-- audio/
 |   |      |-- audio_pipeline.py     # Audio processing orchestration
 |   |      |-- conversion.py         # Optional ffmpeg-based format conversion
-|   |      |-- transcript_mapping.py # Text-span to time-span mapping
+|   |      |-- speech_to_text.py     # Whisper transcription and timing helpers
 |   |      |-- tts_overlay.py        # Spoken placeholder synthesis + overlay
 |   |      `-- wav_ops.py            # WAV read/write and ducking operations
 |   `-- logger.py              # Audit log writer
@@ -55,7 +55,7 @@ Process a single file:
 python main.py --input-file data/input/sample.txt --output-file data/output/sample.anonymized.txt --policy strict
 ```
 
-Process audio (WAV + sidecar transcript):
+Process audio with automatic Whisper transcription:
 
 ```bash
 python main.py --input-file data/input/shift.wav --output-dir data/output --policy strict
@@ -122,47 +122,24 @@ The UI uses the same pipeline and policies as the CLI, so output files and audit
 Audio anonymization is implemented as audio-to-audio masking with spoken placeholders.
 
 - Input audio remains audio and produces anonymized audio output.
+- Whisper generates the transcript automatically, including word-level timing used to align detections back to audio.
 - Sensitive spoken content is replaced by spoken placeholder labels (for example `name`, `location`, `email`).
 - Original voice is ducked under detected redaction intervals.
-- Processing currently requires a timestamped sidecar transcript file next to the audio.
 
 Supported audio processing modes:
 
-- Native `.wav` processing (default direct path).
+- Native `.wav` processing.
 - Optional non-WAV conversion path (`.mp3`, `.m4a`, `.flac`, `.ogg`, `.aac`, `.opus`) via local `ffmpeg`.
 
-Required sidecar naming:
+Whisper configuration:
 
-- `shift.wav` -> `shift.words.json`
-- `shift.mp3` -> `shift.words.json`
-
-Sidecar JSON format:
-
-```json
-{
-  "text": "Email: john.doe@example.com",
-  "words": [
-    {
-      "text": "Email:",
-      "start_char": 0,
-      "end_char": 6,
-      "start_time_s": 0.0,
-      "end_time_s": 0.25
-    },
-    {
-      "text": "john.doe@example.com",
-      "start_char": 7,
-      "end_char": 27,
-      "start_time_s": 0.25,
-      "end_time_s": 0.9
-    }
-  ]
-}
-```
+- `audio.whisper_model` selects the Whisper model name, for example `base` or `small`.
+- `audio.whisper_language` sets the transcription language hint.
+- `ffmpeg` is required for Whisper transcription and for optional audio format conversion.
 
 Phase 2 conversion notes:
 
-- Non-WAV formats are converted to temporary WAV for anonymization and transcoded back to the original extension.
+- Non-WAV formats are converted to temporary WAV for transcription and anonymization, then transcoded back to the original extension.
 - Conversion requires local `ffmpeg` available on `PATH`.
 - Conversion behavior is controlled by `configs/policy.json` under `audio.enable_format_conversion`.
 
@@ -232,7 +209,7 @@ Current implementation notes:
 - File type recognition is implemented for routing text, image, audio, and video files.
 - Policies are implemented via a single JSON config file with mode-based thresholds.
 - Audit logging is implemented to `data/audit_log.csv`.
-- Audio anonymization is implemented for `.wav` files with timestamped sidecar transcripts and spoken placeholder masking.
+- Audio anonymization is implemented for `.wav` files with automatic Whisper transcription and spoken placeholder masking.
 - Phase 2 adds optional non-WAV conversion flow via `ffmpeg` while preserving original output extension.
 - Image and video files are currently routed and reported as not implemented.
 

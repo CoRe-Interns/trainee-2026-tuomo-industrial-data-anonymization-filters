@@ -3,3 +3,4 @@ presidio-anonymizer
 spacy
 pyttsx3
 pydub
+openai-whisper

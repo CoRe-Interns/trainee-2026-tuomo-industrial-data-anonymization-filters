@@ -9,13 +9,13 @@ from typing import Iterable
 from src.anonymizer import AnonymizerTool
 from src.logger import log_redaction
 from src.modalities.audio.audio_pipeline import (
-    process_audio_with_sidecar,
+    process_audio_with_whisper,
     resolve_audio_output_path,
-    resolve_audio_sidecar_path,
 )
 from src.modalities.audio.conversion import (
     cleanup_temp_audio,
     convert_audio_to_wav,
+    ensure_ffmpeg_available,
     transcode_wav_to_audio,
 )
 
@@ -120,14 +120,15 @@ def _serialise_detections(results) -> list[dict[str, object]]:
     ]
 
 
-def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str], bool, int, int]:
+def _audio_config(policy: dict) -> tuple[int, float, dict[str, str], bool, int, int, str, str | None]:
     audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
-    sidecar_extension = audio_cfg.get("sidecar_extension", ".words.json")
     padding_ms = int(audio_cfg.get("padding_ms", 90))
     duck_db = float(audio_cfg.get("duck_db", 16.0))
     enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
     conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
     conversion_channels = int(audio_cfg.get("conversion_channels", 1))
+    whisper_model = str(audio_cfg.get("whisper_model", "base"))
+    whisper_language_raw = audio_cfg.get("whisper_language", policy.get("language", "en") if isinstance(policy, dict) else "en")
     labels = audio_cfg.get(
         "placeholder_labels",
         {
@@ -140,24 +141,27 @@ def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str]
         },
     )
 
-    if not isinstance(sidecar_extension, str) or not sidecar_extension:
-        raise ValueError("Audio policy sidecar_extension must be a non-empty string")
     if not isinstance(labels, dict):
         raise ValueError("Audio policy placeholder_labels must be an object")
+    if not isinstance(whisper_model, str) or not whisper_model:
+        raise ValueError("Audio policy whisper_model must be a non-empty string")
 
     labels_normalized: dict[str, str] = {
         str(key): str(value)
         for key, value in labels.items()
     }
 
+    whisper_language = None if whisper_language_raw is None else str(whisper_language_raw)
+
     return (
-        sidecar_extension,
         padding_ms,
         duck_db,
         labels_normalized,
         enable_conversion,
         conversion_sample_rate,
         conversion_channels,
+        whisper_model,
+        whisper_language,
     )
 
 
@@ -240,6 +244,9 @@ def process_input_file(
         return result
 
     try:
+        if detected_kind == "audio":
+            ensure_ffmpeg_available()
+
         if detected_kind == "text":
             source_text = path.read_text(encoding="utf-8", errors="replace")
             anonymized_text, raw_results, config = process_text_content(source_text, policy_name)
@@ -260,18 +267,18 @@ def process_input_file(
         else:
             tool, config = build_anonymizer(policy_name)
             (
-                sidecar_extension,
                 padding_ms,
                 duck_db,
                 labels,
                 enable_conversion,
                 conversion_sample_rate,
                 conversion_channels,
-            ) = _audio_sidecar_config(config)
+                whisper_model,
+                whisper_language,
+            ) = _audio_config(config)
 
             output_audio_path = resolve_audio_output_path(path, target_output_path)
             report_path = output_audio_path.with_name(_report_filename(output_audio_path))
-            sidecar_path = resolve_audio_sidecar_path(path, sidecar_extension=sidecar_extension)
 
             working_audio_input = path
             working_audio_output = output_audio_path
@@ -288,7 +295,7 @@ def process_input_file(
                         output_path=None,
                         report_path=str(report_path),
                         detections=[],
-                        message="audio processing currently supports only .wav files (enable format conversion in policy to process other formats)",
+                        message="audio processing currently supports only .wav files unless format conversion is enabled in policy",
                     )
                     _write_report(report_path, result)
                     return result
@@ -303,23 +310,22 @@ def process_input_file(
                 working_audio_output = converted_output
 
             try:
-                detections, message = process_audio_with_sidecar(
+                detections, message = process_audio_with_whisper(
                     audio_path=working_audio_input,
                     output_audio_path=working_audio_output,
-                    sidecar_path=sidecar_path,
                     anonymizer_tool=tool,
+                    whisper_model=whisper_model,
+                    whisper_language=whisper_language,
                     padding_ms=padding_ms,
                     duck_db=duck_db,
                     labels=labels,
                 )
             finally:
                 cleanup_temp_audio(converted_input)
-
-            if message is None and converted_output is not None:
-                transcode_wav_to_audio(converted_output, output_audio_path)
-                cleanup_temp_audio(converted_output)
-            elif converted_output is not None:
-                cleanup_temp_audio(converted_output)
+                if converted_output is not None:
+                    if message is None:
+                        transcode_wav_to_audio(converted_output, output_audio_path)
+                    cleanup_temp_audio(converted_output)
 
             if message is not None:
                 result = FileProcessingResult(
