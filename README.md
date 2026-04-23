@@ -17,6 +17,7 @@ The current implementation focuses on text anonymization with policy-based behav
 |   |-- modalities/
 |   |   `-- audio/
 |   |      |-- audio_pipeline.py     # Audio processing orchestration
+|   |      |-- conversion.py         # Optional ffmpeg-based format conversion
 |   |      |-- transcript_mapping.py # Text-span to time-span mapping
 |   |      |-- tts_overlay.py        # Spoken placeholder synthesis + overlay
 |   |      `-- wav_ops.py            # WAV read/write and ducking operations
@@ -116,18 +117,24 @@ Batch tab highlights:
 
 The UI uses the same pipeline and policies as the CLI, so output files and audit logging stay consistent.
 
-## Audio anonymization (WAV)
+## Audio anonymization
 
-Audio anonymization is implemented as audio-to-audio masking for `.wav` files.
+Audio anonymization is implemented as audio-to-audio masking with spoken placeholders.
 
-- Input audio remains audio and produces anonymized `.wav` output.
+- Input audio remains audio and produces anonymized audio output.
 - Sensitive spoken content is replaced by spoken placeholder labels (for example `name`, `location`, `email`).
 - Original voice is ducked under detected redaction intervals.
 - Processing currently requires a timestamped sidecar transcript file next to the audio.
 
+Supported audio processing modes:
+
+- Native `.wav` processing (default direct path).
+- Optional non-WAV conversion path (`.mp3`, `.m4a`, `.flac`, `.ogg`, `.aac`, `.opus`) via local `ffmpeg`.
+
 Required sidecar naming:
 
 - `shift.wav` -> `shift.words.json`
+- `shift.mp3` -> `shift.words.json`
 
 Sidecar JSON format:
 
@@ -153,9 +160,11 @@ Sidecar JSON format:
 }
 ```
 
-Current limitation:
+Phase 2 conversion notes:
 
-- Non-WAV audio formats are detected but skipped with a clear status message.
+- Non-WAV formats are converted to temporary WAV for anonymization and transcoded back to the original extension.
+- Conversion requires local `ffmpeg` available on `PATH`.
+- Conversion behavior is controlled by `configs/policy.json` under `audio.enable_format_conversion`.
 
 ## Policy behavior
 
@@ -224,6 +233,7 @@ Current implementation notes:
 - Policies are implemented via a single JSON config file with mode-based thresholds.
 - Audit logging is implemented to `data/audit_log.csv`.
 - Audio anonymization is implemented for `.wav` files with timestamped sidecar transcripts and spoken placeholder masking.
+- Phase 2 adds optional non-WAV conversion flow via `ffmpeg` while preserving original output extension.
 - Image and video files are currently routed and reported as not implemented.
 
 Planned next steps:

@@ -21,9 +21,19 @@ def resolve_audio_sidecar_path(audio_path: str | Path, sidecar_extension: str = 
 
 
 def resolve_audio_output_path(input_path: str | Path, output_path: str | Path) -> Path:
+    source = Path(input_path)
     target = Path(output_path)
+
+    # If caller gives a generic stem (from .anonymized original), retain source extension semantics.
+    if target.suffix.lower() != source.suffix.lower():
+        target = target.with_suffix(source.suffix)
+
+    if ".anonymized" not in target.stem:
+        target = target.with_name(f"{target.stem}.anonymized{target.suffix}")
+
     if target.suffix.lower() != ".wav":
-        target = target.with_suffix(".wav")
+        return target
+
     return target
 
 

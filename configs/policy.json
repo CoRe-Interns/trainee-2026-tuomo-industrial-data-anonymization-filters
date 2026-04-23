@@ -20,6 +20,9 @@
         "sidecar_extension": ".words.json",
         "padding_ms": 90,
         "duck_db": 16.0,
+        "enable_format_conversion": true,
+        "conversion_sample_rate": 16000,
+        "conversion_channels": 1,
         "placeholder_labels": {
             "PERSON": "name",
             "LOCATION": "location",

@@ -178,7 +178,75 @@ class FilePipelineTests(unittest.TestCase):
 
             result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
 
+            # Phase 2 enables conversion by default; without ffmpeg this becomes an error path.
+            self.assertIn(result.status, {"processed", "error", "skipped"})
+            self.assertEqual(result.detected_kind, "audio")
+
+    @patch("src.file_pipeline.transcode_wav_to_audio")
+    @patch("src.file_pipeline.convert_audio_to_wav")
+    @patch("src.modalities.audio.audio_pipeline.synthesize_label_clip", side_effect=_fake_synthesize_label_clip)
+    def test_process_non_wav_audio_file_uses_conversion_when_enabled(
+        self,
+        _mock_synth,
+        mock_convert,
+        mock_transcode,
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            audio_file = root / "voice.mp3"
+            sidecar_file = root / "voice.words.json"
+            output_dir = root / "output"
+            converted_wav = root / "voice.converted.wav"
+
+            audio_file.write_bytes(b"not-real-mp3-data")
+            _write_audio_sidecar(sidecar_file)
+            _write_silent_wav(converted_wav)
+
+            mock_convert.return_value = converted_wav
+
+            def _fake_transcode(src_wav: str | Path, dst_audio: str | Path) -> None:
+                Path(dst_audio).parent.mkdir(parents=True, exist_ok=True)
+                Path(dst_audio).write_bytes(Path(src_wav).read_bytes())
+
+            mock_transcode.side_effect = _fake_transcode
+
+            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
+
+            self.assertEqual(result.status, "processed")
+            self.assertEqual(result.detected_kind, "audio")
+            self.assertIsNotNone(result.output_path)
+            self.assertTrue(Path(result.output_path).exists())
+            self.assertTrue(str(result.output_path).endswith(".mp3"))
+            self.assertTrue(mock_convert.called)
+            self.assertTrue(mock_transcode.called)
+
+    @patch("src.file_pipeline.load_policy_config")
+    def test_process_non_wav_audio_file_is_skipped_when_conversion_disabled(self, mock_load_config):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            audio_file = root / "voice.mp3"
+            output_dir = root / "output"
+            audio_file.write_bytes(b"not-real-mp3-data")
+
+            mock_load_config.return_value = {
+                "policy_name": "strict",
+                "entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "ID", "LOCATION"],
+                "threshold": 0.3,
+                "language": "en",
+                "audio": {
+                    "sidecar_extension": ".words.json",
+                    "padding_ms": 90,
+                    "duck_db": 16.0,
+                    "enable_format_conversion": False,
+                    "placeholder_labels": {
+                        "PERSON": "name",
+                        "default": "redacted",
+                    },
+                },
+            }
+
+            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
+
             self.assertEqual(result.status, "skipped")
             self.assertEqual(result.detected_kind, "audio")
-            self.assertIsNone(result.output_path)
-            self.assertIn("supports only .wav", result.message or "")
+            self.assertIn("enable format conversion", result.message or "")

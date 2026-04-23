@@ -13,6 +13,11 @@ from src.modalities.audio.audio_pipeline import (
     resolve_audio_output_path,
     resolve_audio_sidecar_path,
 )
+from src.modalities.audio.conversion import (
+    cleanup_temp_audio,
+    convert_audio_to_wav,
+    transcode_wav_to_audio,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -115,11 +120,14 @@ def _serialise_detections(results) -> list[dict[str, object]]:
     ]
 
 
-def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str]]:
+def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str], bool, int, int]:
     audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
     sidecar_extension = audio_cfg.get("sidecar_extension", ".words.json")
     padding_ms = int(audio_cfg.get("padding_ms", 90))
     duck_db = float(audio_cfg.get("duck_db", 16.0))
+    enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
+    conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
+    conversion_channels = int(audio_cfg.get("conversion_channels", 1))
     labels = audio_cfg.get(
         "placeholder_labels",
         {
@@ -142,7 +150,15 @@ def _audio_sidecar_config(policy: dict) -> tuple[str, int, float, dict[str, str]
         for key, value in labels.items()
     }
 
-    return sidecar_extension, padding_ms, duck_db, labels_normalized
+    return (
+        sidecar_extension,
+        padding_ms,
+        duck_db,
+        labels_normalized,
+        enable_conversion,
+        conversion_sample_rate,
+        conversion_channels,
+    )
 
 
 def _anonymized_filename(file_path: Path) -> str:
@@ -242,36 +258,68 @@ def process_input_file(
                 detections=_serialise_detections(raw_results),
             )
         else:
-            if path.suffix.lower() != ".wav":
-                result = FileProcessingResult(
-                    input_path=str(path),
-                    detected_kind=detected_kind,
-                    status="skipped",
-                    policy_name=policy_name,
-                    output_path=None,
-                    report_path=str(report_path),
-                    detections=[],
-                    message="audio processing currently supports only .wav files",
-                )
-                _write_report(report_path, result)
-                return result
-
             tool, config = build_anonymizer(policy_name)
-            sidecar_extension, padding_ms, duck_db, labels = _audio_sidecar_config(config)
+            (
+                sidecar_extension,
+                padding_ms,
+                duck_db,
+                labels,
+                enable_conversion,
+                conversion_sample_rate,
+                conversion_channels,
+            ) = _audio_sidecar_config(config)
 
             output_audio_path = resolve_audio_output_path(path, target_output_path)
             report_path = output_audio_path.with_name(_report_filename(output_audio_path))
             sidecar_path = resolve_audio_sidecar_path(path, sidecar_extension=sidecar_extension)
 
-            detections, message = process_audio_with_sidecar(
-                audio_path=path,
-                output_audio_path=output_audio_path,
-                sidecar_path=sidecar_path,
-                anonymizer_tool=tool,
-                padding_ms=padding_ms,
-                duck_db=duck_db,
-                labels=labels,
-            )
+            working_audio_input = path
+            working_audio_output = output_audio_path
+            converted_input: Path | None = None
+            converted_output: Path | None = None
+
+            if path.suffix.lower() != ".wav":
+                if not enable_conversion:
+                    result = FileProcessingResult(
+                        input_path=str(path),
+                        detected_kind=detected_kind,
+                        status="skipped",
+                        policy_name=policy_name,
+                        output_path=None,
+                        report_path=str(report_path),
+                        detections=[],
+                        message="audio processing currently supports only .wav files (enable format conversion in policy to process other formats)",
+                    )
+                    _write_report(report_path, result)
+                    return result
+
+                converted_input = convert_audio_to_wav(
+                    input_path=path,
+                    sample_rate=conversion_sample_rate,
+                    channels=conversion_channels,
+                )
+                converted_output = output_audio_path.with_suffix(".tmp.anonymized.wav")
+                working_audio_input = converted_input
+                working_audio_output = converted_output
+
+            try:
+                detections, message = process_audio_with_sidecar(
+                    audio_path=working_audio_input,
+                    output_audio_path=working_audio_output,
+                    sidecar_path=sidecar_path,
+                    anonymizer_tool=tool,
+                    padding_ms=padding_ms,
+                    duck_db=duck_db,
+                    labels=labels,
+                )
+            finally:
+                cleanup_temp_audio(converted_input)
+
+            if message is None and converted_output is not None:
+                transcode_wav_to_audio(converted_output, output_audio_path)
+                cleanup_temp_audio(converted_output)
+            elif converted_output is not None:
+                cleanup_temp_audio(converted_output)
 
             if message is not None:
                 result = FileProcessingResult(
