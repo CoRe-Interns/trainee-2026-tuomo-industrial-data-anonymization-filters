@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import array
+import subprocess
 import tempfile
 import wave
 from pathlib import Path
@@ -13,14 +14,40 @@ from src.modalities.audio.wav_ops import (
 )
 
 
-def _synth_to_wav_file(label_text: str) -> Path:
+def _synth_to_wav_file(label_text: str, backend: str = "pyttsx3", cli_command: str | None = None) -> Path:
+    temp_dir = Path(tempfile.mkdtemp(prefix="audio_tts_"))
+    output_path = temp_dir / "label.wav"
+
+    if backend == "cli":
+        if not cli_command:
+            raise RuntimeError("audio.tts_cli_command is required when audio.tts_backend is set to 'cli'")
+
+        text_path = temp_dir / "input.txt"
+        text_path.write_text(label_text, encoding="utf-8")
+
+        command = cli_command.format(
+            text=label_text,
+            input_text_file=str(text_path),
+            output_wav=str(output_path),
+        )
+
+        try:
+            subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            raise RuntimeError(f"TTS CLI command failed: {stderr or exc}") from exc
+
+        if not output_path.exists():
+            raise RuntimeError("TTS CLI command did not produce output audio")
+        return output_path
+
+    if backend != "pyttsx3":
+        raise RuntimeError(f"Unsupported TTS backend: {backend}")
+
     try:
         import pyttsx3
     except ImportError as exc:
         raise RuntimeError("pyttsx3 is required for spoken-label audio anonymization") from exc
-
-    temp_dir = Path(tempfile.mkdtemp(prefix="audio_tts_"))
-    output_path = temp_dir / "label.wav"
 
     engine = pyttsx3.init()
     engine.setProperty("rate", 170)
@@ -73,8 +100,8 @@ def _resample_pcm16(frames: bytes, channels: int, src_rate: int, dst_rate: int) 
     return pcm16_samples_to_bytes(dst_samples)
 
 
-def synthesize_label_clip(label_text: str, target: WavData) -> WavData:
-    wav_file = _synth_to_wav_file(label_text)
+def synthesize_text_clip(text: str, target: WavData, backend: str = "pyttsx3", cli_command: str | None = None) -> WavData:
+    wav_file = _synth_to_wav_file(text, backend=backend, cli_command=cli_command)
     try:
         synthesized = _read_wav_as_data(wav_file)
     finally:
@@ -120,6 +147,10 @@ def synthesize_label_clip(label_text: str, target: WavData) -> WavData:
         frame_rate=target.frame_rate,
         frames=frames,
     )
+
+
+def synthesize_label_clip(label_text: str, target: WavData) -> WavData:
+    return synthesize_text_clip(label_text, target, backend="pyttsx3", cli_command=None)
 
 
 def overlay_clip(

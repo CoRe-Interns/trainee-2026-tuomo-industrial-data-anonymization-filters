@@ -119,12 +119,12 @@ The UI uses the same pipeline and policies as the CLI, so output files and audit
 
 ## Audio anonymization
 
-Audio anonymization is implemented as audio-to-audio masking with spoken placeholders.
+Audio anonymization is implemented as a speech-to-speech pipeline.
 
-- Input audio remains audio and produces anonymized audio output.
-- Whisper generates the transcript automatically, including word-level timing used to align detections back to audio.
-- Sensitive spoken content is replaced by spoken placeholder labels (for example `name`, `location`, `email`).
-- Original voice is ducked under detected redaction intervals.
+- Input audio is transcribed to text with Whisper.
+- Sensitive content is detected and anonymized in text using the same policy engine as text files.
+- The anonymized transcript is synthesized back to audio.
+- Timing gaps from the transcript are preserved so output pacing remains natural.
 
 Supported audio processing modes:
 
@@ -135,7 +135,11 @@ Whisper configuration:
 
 - `audio.whisper_model` selects the Whisper model name, for example `base` or `small`.
 - `audio.whisper_language` sets the transcription language hint.
+- `audio.tts_backend` selects TTS backend (`pyttsx3` or `cli`).
+- `audio.tts_cli_command` provides the local CLI command template when `tts_backend` is `cli`.
+  - The template can use `{text}`, `{input_text_file}`, and `{output_wav}` placeholders.
 - `ffmpeg` is required for Whisper transcription and for optional audio format conversion.
+- The app automatically tries common Windows ffmpeg install locations, including the WinGet package path, so UI sessions usually work without manually editing PATH.
 
 Phase 2 conversion notes:
 
@@ -209,7 +213,7 @@ Current implementation notes:
 - File type recognition is implemented for routing text, image, audio, and video files.
 - Policies are implemented via a single JSON config file with mode-based thresholds.
 - Audit logging is implemented to `data/audit_log.csv`.
-- Audio anonymization is implemented for `.wav` files with automatic Whisper transcription and spoken placeholder masking.
+- Audio anonymization is implemented for `.wav` files with automatic Whisper transcription, text anonymization, and speech re-synthesis.
 - Phase 2 adds optional non-WAV conversion flow via `ffmpeg` while preserving original output extension.
 - Image and video files are currently routed and reported as not implemented.
 

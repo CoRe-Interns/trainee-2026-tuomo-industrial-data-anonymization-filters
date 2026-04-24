@@ -120,15 +120,15 @@ def _serialise_detections(results) -> list[dict[str, object]]:
     ]
 
 
-def _audio_config(policy: dict) -> tuple[int, float, dict[str, str], bool, int, int, str, str | None]:
+def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, str | None, str, str | None]:
     audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
-    padding_ms = int(audio_cfg.get("padding_ms", 90))
-    duck_db = float(audio_cfg.get("duck_db", 16.0))
     enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
     conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
     conversion_channels = int(audio_cfg.get("conversion_channels", 1))
     whisper_model = str(audio_cfg.get("whisper_model", "base"))
     whisper_language_raw = audio_cfg.get("whisper_language", policy.get("language", "en") if isinstance(policy, dict) else "en")
+    tts_backend = str(audio_cfg.get("tts_backend", "pyttsx3")).strip().lower()
+    tts_cli_command_raw = audio_cfg.get("tts_cli_command")
     labels = audio_cfg.get(
         "placeholder_labels",
         {
@@ -145,6 +145,8 @@ def _audio_config(policy: dict) -> tuple[int, float, dict[str, str], bool, int, 
         raise ValueError("Audio policy placeholder_labels must be an object")
     if not isinstance(whisper_model, str) or not whisper_model:
         raise ValueError("Audio policy whisper_model must be a non-empty string")
+    if tts_backend not in {"pyttsx3", "cli"}:
+        raise ValueError("Audio policy tts_backend must be either 'pyttsx3' or 'cli'")
 
     labels_normalized: dict[str, str] = {
         str(key): str(value)
@@ -152,16 +154,20 @@ def _audio_config(policy: dict) -> tuple[int, float, dict[str, str], bool, int, 
     }
 
     whisper_language = None if whisper_language_raw is None else str(whisper_language_raw)
+    tts_cli_command = None if tts_cli_command_raw is None else str(tts_cli_command_raw)
+
+    if tts_backend == "cli" and (not tts_cli_command or not tts_cli_command.strip()):
+        raise ValueError("Audio policy tts_cli_command is required when tts_backend='cli'")
 
     return (
-        padding_ms,
-        duck_db,
         labels_normalized,
         enable_conversion,
         conversion_sample_rate,
         conversion_channels,
         whisper_model,
         whisper_language,
+        tts_backend,
+        tts_cli_command,
     )
 
 
@@ -267,14 +273,14 @@ def process_input_file(
         else:
             tool, config = build_anonymizer(policy_name)
             (
-                padding_ms,
-                duck_db,
                 labels,
                 enable_conversion,
                 conversion_sample_rate,
                 conversion_channels,
                 whisper_model,
                 whisper_language,
+                tts_backend,
+                tts_cli_command,
             ) = _audio_config(config)
 
             output_audio_path = resolve_audio_output_path(path, target_output_path)
@@ -316,9 +322,9 @@ def process_input_file(
                     anonymizer_tool=tool,
                     whisper_model=whisper_model,
                     whisper_language=whisper_language,
-                    padding_ms=padding_ms,
-                    duck_db=duck_db,
                     labels=labels,
+                    tts_backend=tts_backend,
+                    tts_cli_command=tts_cli_command,
                 )
             finally:
                 cleanup_temp_audio(converted_input)

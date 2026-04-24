@@ -21,7 +21,7 @@ def _write_silent_wav(path: Path, frame_rate: int = 16000, duration_s: float = 1
         handle.writeframes(frames)
 
 
-def _fake_synthesize_label_clip(_label: str, target: WavData) -> WavData:
+def _fake_synthesize_text_clip(_text: str, target: WavData, backend: str = "pyttsx3", cli_command: str | None = None) -> WavData:
     frame_count = int(target.frame_rate * 0.25)
     sample_value = 1200
 
@@ -123,7 +123,7 @@ class FilePipelineTests(unittest.TestCase):
 
     @patch("src.file_pipeline.ensure_ffmpeg_available")
     @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
-    @patch("src.modalities.audio.audio_pipeline.synthesize_label_clip", side_effect=_fake_synthesize_label_clip)
+    @patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip)
     def test_process_audio_file_writes_anonymized_wav_and_report(self, _mock_synth, _mock_transcribe, _mock_ffmpeg):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -157,7 +157,7 @@ class FilePipelineTests(unittest.TestCase):
     @patch("src.file_pipeline.transcode_wav_to_audio")
     @patch("src.file_pipeline.convert_audio_to_wav")
     @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
-    @patch("src.modalities.audio.audio_pipeline.synthesize_label_clip", side_effect=_fake_synthesize_label_clip)
+    @patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip)
     def test_process_non_wav_audio_file_uses_conversion_when_enabled(
         self,
         _mock_synth,
@@ -213,6 +213,8 @@ class FilePipelineTests(unittest.TestCase):
                     "enable_format_conversion": False,
                     "whisper_model": "base",
                     "whisper_language": "en",
+                    "tts_backend": "pyttsx3",
+                    "tts_cli_command": None,
                     "placeholder_labels": {
                         "PERSON": "name",
                         "default": "redacted",

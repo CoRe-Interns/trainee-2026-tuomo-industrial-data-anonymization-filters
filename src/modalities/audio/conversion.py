@@ -1,13 +1,52 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 
+def _candidate_ffmpeg_bins() -> list[Path]:
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    candidates = [
+        Path(r"C:\ffmpeg\bin"),
+        Path(r"C:\Program Files\ffmpeg\bin"),
+    ]
+
+    if local_app_data:
+        candidates.append(
+            Path(local_app_data)
+            / "Microsoft"
+            / "WinGet"
+            / "Packages"
+            / "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
+            / "ffmpeg-8.1-full_build"
+            / "bin"
+        )
+
+    return candidates
+
+
+def _prepend_path(path_dir: Path) -> None:
+    current_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{path_dir};{current_path}" if current_path else str(path_dir)
+
+
+def _bootstrap_ffmpeg_path() -> bool:
+    if shutil.which("ffmpeg") is not None:
+        return True
+
+    for candidate in _candidate_ffmpeg_bins():
+        if (candidate / "ffmpeg.exe").exists():
+            _prepend_path(candidate)
+            return shutil.which("ffmpeg") is not None
+
+    return False
+
+
 def ensure_ffmpeg_available() -> None:
-    if shutil.which("ffmpeg") is None:
+    if not _bootstrap_ffmpeg_path():
         raise RuntimeError("ffmpeg is required for non-WAV audio conversion but was not found on PATH")
 
 
