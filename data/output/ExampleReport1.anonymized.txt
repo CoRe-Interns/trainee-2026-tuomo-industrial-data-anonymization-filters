@@ -1,0 +1,16 @@
+PAGE 1 — SHIFT A REPORT (06:00–14:00)
+
+Supervisor: [NAME1] ([ID1])
+Date: 2026-03-03
+[SITE]
+
+06:05 — Started Line L1 with [NAME2] ([ID2]) on MX-4421. Machine sounded slightly off but within tolerance.
+06:47 — Emergency stop triggered. [NAME3] said he heard a “metallic knock” before shutdown. Logged under incident INC-9012.
+07:20 — [NAME4] ([ID3]) reported L2 running fine, output steady ~210 units/hour.
+08:10 — Coffee break. [NAME5] left early, said he had a headache (not logged officially).
+09:35 — Maintenance ([NAME6], [ID4]) checked MX-4421, replaced fan unit.
+11:50 — Minor disagreement between [NAME3] and [NAME7] about root cause (“operator misuse” vs “old equipment”).
+13:30 — Line L1 resumed. Output slightly below target.
+
+End of shift notes:
+We’re seeing repeated issues with MX-4421 over past week. Recommend deeper inspection. [NAME3] mentioned similar noise last Friday but didn’t file report.

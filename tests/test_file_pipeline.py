@@ -21,7 +21,16 @@ def _write_silent_wav(path: Path, frame_rate: int = 16000, duration_s: float = 1
         handle.writeframes(frames)
 
 
-def _fake_synthesize_text_clip(_text: str, target: WavData, backend: str = "pyttsx3", cli_command: str | None = None) -> WavData:
+def _fake_synthesize_text_clip(
+    _text: str,
+    target: WavData,
+    backend: str = "pyttsx3",
+    cli_command: str | None = None,
+    kokoro_voice: str = "af_heart",
+    kokoro_lang_code: str = "a",
+    kokoro_speed: float = 1.0,
+    kokoro_repo_id: str = "hexgrad/Kokoro-82M",
+) -> WavData:
     frame_count = int(target.frame_rate * 0.25)
     sample_value = 1200
 
@@ -213,8 +222,12 @@ class FilePipelineTests(unittest.TestCase):
                     "enable_format_conversion": False,
                     "whisper_model": "base",
                     "whisper_language": "en",
-                    "tts_backend": "pyttsx3",
+                    "tts_backend": "kokoro",
                     "tts_cli_command": None,
+                    "kokoro_voice": "af_heart",
+                    "kokoro_lang_code": "a",
+                    "kokoro_speed": 1.0,
+                    "kokoro_repo_id": "hexgrad/Kokoro-82M",
                     "placeholder_labels": {
                         "PERSON": "name",
                         "default": "redacted",

@@ -120,7 +120,7 @@ def _serialise_detections(results) -> list[dict[str, object]]:
     ]
 
 
-def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, str | None, str, str | None]:
+def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, str | None, str, str | None, str, str, float, str]:
     audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
     enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
     conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
@@ -129,6 +129,10 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
     whisper_language_raw = audio_cfg.get("whisper_language", policy.get("language", "en") if isinstance(policy, dict) else "en")
     tts_backend = str(audio_cfg.get("tts_backend", "pyttsx3")).strip().lower()
     tts_cli_command_raw = audio_cfg.get("tts_cli_command")
+    kokoro_voice = str(audio_cfg.get("kokoro_voice", "af_heart")).strip()
+    kokoro_lang_code = str(audio_cfg.get("kokoro_lang_code", "a")).strip()
+    kokoro_speed = float(audio_cfg.get("kokoro_speed", 1.0))
+    kokoro_repo_id = str(audio_cfg.get("kokoro_repo_id", "hexgrad/Kokoro-82M")).strip()
     labels = audio_cfg.get(
         "placeholder_labels",
         {
@@ -145,8 +149,16 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         raise ValueError("Audio policy placeholder_labels must be an object")
     if not isinstance(whisper_model, str) or not whisper_model:
         raise ValueError("Audio policy whisper_model must be a non-empty string")
-    if tts_backend not in {"pyttsx3", "cli"}:
-        raise ValueError("Audio policy tts_backend must be either 'pyttsx3' or 'cli'")
+    if tts_backend not in {"pyttsx3", "cli", "kokoro"}:
+        raise ValueError("Audio policy tts_backend must be one of: 'pyttsx3', 'cli', 'kokoro'")
+    if not kokoro_voice:
+        raise ValueError("Audio policy kokoro_voice must be a non-empty string")
+    if not kokoro_lang_code:
+        raise ValueError("Audio policy kokoro_lang_code must be a non-empty string")
+    if kokoro_speed <= 0:
+        raise ValueError("Audio policy kokoro_speed must be > 0")
+    if not kokoro_repo_id:
+        raise ValueError("Audio policy kokoro_repo_id must be a non-empty string")
 
     labels_normalized: dict[str, str] = {
         str(key): str(value)
@@ -168,6 +180,10 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         whisper_language,
         tts_backend,
         tts_cli_command,
+        kokoro_voice,
+        kokoro_lang_code,
+        kokoro_speed,
+        kokoro_repo_id,
     )
 
 
@@ -281,6 +297,10 @@ def process_input_file(
                 whisper_language,
                 tts_backend,
                 tts_cli_command,
+                kokoro_voice,
+                kokoro_lang_code,
+                kokoro_speed,
+                kokoro_repo_id,
             ) = _audio_config(config)
 
             output_audio_path = resolve_audio_output_path(path, target_output_path)
@@ -290,6 +310,7 @@ def process_input_file(
             working_audio_output = output_audio_path
             converted_input: Path | None = None
             converted_output: Path | None = None
+            message: str | None = None
 
             if path.suffix.lower() != ".wav":
                 if not enable_conversion:
@@ -325,6 +346,10 @@ def process_input_file(
                     labels=labels,
                     tts_backend=tts_backend,
                     tts_cli_command=tts_cli_command,
+                    kokoro_voice=kokoro_voice,
+                    kokoro_lang_code=kokoro_lang_code,
+                    kokoro_speed=kokoro_speed,
+                    kokoro_repo_id=kokoro_repo_id,
                 )
             finally:
                 cleanup_temp_audio(converted_input)

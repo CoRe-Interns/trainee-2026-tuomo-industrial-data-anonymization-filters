@@ -135,7 +135,11 @@ Whisper configuration:
 
 - `audio.whisper_model` selects the Whisper model name, for example `base` or `small`.
 - `audio.whisper_language` sets the transcription language hint.
-- `audio.tts_backend` selects TTS backend (`pyttsx3` or `cli`).
+- `audio.tts_backend` selects TTS backend (`kokoro`, `pyttsx3`, or `cli`).
+- `audio.kokoro_voice` sets the Kokoro voice id (default `af_heart`).
+- `audio.kokoro_lang_code` sets Kokoro language code (default `a`).
+- `audio.kokoro_speed` controls Kokoro speaking speed.
+- `audio.kokoro_repo_id` sets the Hugging Face Kokoro model repo (default `hexgrad/Kokoro-82M`).
 - `audio.tts_cli_command` provides the local CLI command template when `tts_backend` is `cli`.
   - The template can use `{text}`, `{input_text_file}`, and `{output_wav}` placeholders.
 - `ffmpeg` is required for Whisper transcription and for optional audio format conversion.
@@ -146,6 +150,12 @@ Phase 2 conversion notes:
 - Non-WAV formats are converted to temporary WAV for transcription and anonymization, then transcoded back to the original extension.
 - Conversion requires local `ffmpeg` available on `PATH`.
 - Conversion behavior is controlled by `configs/policy.json` under `audio.enable_format_conversion`.
+
+Kokoro notes:
+
+- Kokoro is the default backend because it is substantially more understandable than system voices.
+- Install dependencies from `requirements.txt` before running audio anonymization.
+- If you need a different backend temporarily, set `audio.tts_backend` to `cli` or `pyttsx3`.
 
 ## Policy behavior
 
@@ -202,7 +212,7 @@ Columns:
 ## Notes for contributors
 
 - Keep changes small and focused.
-- Prefer local-first processing and explicit auditability.
+- Software has to be local-only
 
 ## Versions
 
@@ -220,6 +230,5 @@ Current implementation notes:
 Planned next steps:
 
 - Add UI on top of stable pipeline contracts.
-- Add audio anonymization.
 - Add image anonymization.
 - Add video anonymization.

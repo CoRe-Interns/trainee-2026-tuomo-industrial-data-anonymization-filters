@@ -4,3 +4,5 @@ spacy
 pyttsx3
 pydub
 openai-whisper
+kokoro
+soundfile

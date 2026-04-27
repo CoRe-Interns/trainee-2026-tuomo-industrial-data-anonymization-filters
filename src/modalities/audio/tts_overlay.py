@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import array
+from functools import lru_cache
 import subprocess
 import tempfile
 import wave
+import warnings
 from pathlib import Path
 
 from src.modalities.audio.wav_ops import (
@@ -14,7 +16,15 @@ from src.modalities.audio.wav_ops import (
 )
 
 
-def _synth_to_wav_file(label_text: str, backend: str = "pyttsx3", cli_command: str | None = None) -> Path:
+def _synth_to_wav_file(
+    label_text: str,
+    backend: str = "pyttsx3",
+    cli_command: str | None = None,
+    kokoro_voice: str = "af_heart",
+    kokoro_lang_code: str = "a",
+    kokoro_speed: float = 1.0,
+    kokoro_repo_id: str = "hexgrad/Kokoro-82M",
+) -> Path:
     temp_dir = Path(tempfile.mkdtemp(prefix="audio_tts_"))
     output_path = temp_dir / "label.wav"
 
@@ -41,6 +51,54 @@ def _synth_to_wav_file(label_text: str, backend: str = "pyttsx3", cli_command: s
             raise RuntimeError("TTS CLI command did not produce output audio")
         return output_path
 
+    if backend == "kokoro":
+        try:
+            import numpy as np
+            import soundfile as sf
+        except ImportError as exc:
+            warnings.warn(
+                f"kokoro backend unavailable ({exc}); falling back to pyttsx3",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            backend = "pyttsx3"
+        else:
+            pipeline = _get_kokoro_pipeline(kokoro_lang_code, kokoro_repo_id)
+            audio_segments = []
+
+            try:
+                stream = pipeline(label_text, voice=kokoro_voice, speed=kokoro_speed)
+            except TypeError:
+                stream = pipeline(label_text, voice=kokoro_voice)
+
+            for item in stream:
+                audio = None
+
+                # Older Kokoro stream format: tuple where audio is index 2.
+                if isinstance(item, tuple) and len(item) >= 3:
+                    audio = item[2]
+
+                # Current Kokoro stream format: KPipeline.Result with output.audio tensor.
+                if audio is None and hasattr(item, "output"):
+                    output = getattr(item, "output", None)
+                    audio = getattr(output, "audio", None)
+
+                if audio is None:
+                    continue
+
+                # Torch tensors expose detach/cpu/numpy chain.
+                if hasattr(audio, "detach") and hasattr(audio, "cpu") and hasattr(audio, "numpy"):
+                    audio = audio.detach().cpu().numpy()
+
+                audio_segments.append(np.asarray(audio, dtype=np.float32))
+
+            if not audio_segments:
+                raise RuntimeError("Kokoro synthesis did not return audio segments")
+
+            combined = np.concatenate(audio_segments)
+            sf.write(str(output_path), combined, 24000)
+            return output_path
+
     if backend != "pyttsx3":
         raise RuntimeError(f"Unsupported TTS backend: {backend}")
 
@@ -59,6 +117,13 @@ def _synth_to_wav_file(label_text: str, backend: str = "pyttsx3", cli_command: s
         raise RuntimeError("TTS synthesis did not produce output audio")
 
     return output_path
+
+
+@lru_cache(maxsize=4)
+def _get_kokoro_pipeline(lang_code: str, repo_id: str):
+    from kokoro import KPipeline
+
+    return KPipeline(lang_code=lang_code, repo_id=repo_id)
 
 
 def _read_wav_as_data(path: str | Path) -> WavData:
@@ -100,8 +165,25 @@ def _resample_pcm16(frames: bytes, channels: int, src_rate: int, dst_rate: int) 
     return pcm16_samples_to_bytes(dst_samples)
 
 
-def synthesize_text_clip(text: str, target: WavData, backend: str = "pyttsx3", cli_command: str | None = None) -> WavData:
-    wav_file = _synth_to_wav_file(text, backend=backend, cli_command=cli_command)
+def synthesize_text_clip(
+    text: str,
+    target: WavData,
+    backend: str = "pyttsx3",
+    cli_command: str | None = None,
+    kokoro_voice: str = "af_heart",
+    kokoro_lang_code: str = "a",
+    kokoro_speed: float = 1.0,
+    kokoro_repo_id: str = "hexgrad/Kokoro-82M",
+) -> WavData:
+    wav_file = _synth_to_wav_file(
+        text,
+        backend=backend,
+        cli_command=cli_command,
+        kokoro_voice=kokoro_voice,
+        kokoro_lang_code=kokoro_lang_code,
+        kokoro_speed=kokoro_speed,
+        kokoro_repo_id=kokoro_repo_id,
+    )
     try:
         synthesized = _read_wav_as_data(wav_file)
     finally:

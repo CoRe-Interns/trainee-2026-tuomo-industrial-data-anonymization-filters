@@ -104,14 +104,31 @@ def _build_spoken_chunks(
                 break
 
         if matched is None:
+            phrase_tokens = [token.text]
+            start_time_s = token.start_time_s
+            end_time_s = token.end_time_s
+            index += 1
+
+            while index < len(tokens):
+                next_token = tokens[index]
+                blocked = False
+                for item in detection_meta:
+                    if _overlaps_span(next_token, int(item["start_char"]), int(item["end_char"])):
+                        blocked = True
+                        break
+                if blocked:
+                    break
+                phrase_tokens.append(next_token.text)
+                end_time_s = next_token.end_time_s
+                index += 1
+
             chunks.append(
                 SpokenChunk(
-                    text=token.text,
-                    start_time_s=token.start_time_s,
-                    end_time_s=token.end_time_s,
+                    text=" ".join(phrase_tokens),
+                    start_time_s=start_time_s,
+                    end_time_s=end_time_s,
                 )
             )
-            index += 1
             continue
 
         key = (int(matched["start_char"]), int(matched["end_char"]), str(matched["entity_type"]))
@@ -145,6 +162,10 @@ def _synthesize_speech_timeline(
     target_audio: WavData,
     tts_backend: str,
     tts_cli_command: str | None,
+    kokoro_voice: str,
+    kokoro_lang_code: str,
+    kokoro_speed: float,
+    kokoro_repo_id: str,
 ) -> WavData:
     if not chunks:
         return WavData(
@@ -167,6 +188,10 @@ def _synthesize_speech_timeline(
             target=target_audio,
             backend=tts_backend,
             cli_command=tts_cli_command,
+            kokoro_voice=kokoro_voice,
+            kokoro_lang_code=kokoro_lang_code,
+            kokoro_speed=kokoro_speed,
+            kokoro_repo_id=kokoro_repo_id,
         )
         output_parts.append(clip.frames)
         cursor_time_s += clip.duration_s
@@ -188,6 +213,10 @@ def process_audio_with_whisper(
     labels: dict[str, str],
     tts_backend: str,
     tts_cli_command: str | None,
+    kokoro_voice: str,
+    kokoro_lang_code: str,
+    kokoro_speed: float,
+    kokoro_repo_id: str,
 ) -> tuple[list[dict[str, object]], str | None]:
     audio = read_wav(audio_path)
 
@@ -217,6 +246,10 @@ def process_audio_with_whisper(
         target_audio=audio,
         tts_backend=tts_backend,
         tts_cli_command=tts_cli_command,
+        kokoro_voice=kokoro_voice,
+        kokoro_lang_code=kokoro_lang_code,
+        kokoro_speed=kokoro_speed,
+        kokoro_repo_id=kokoro_repo_id,
     )
 
     write_wav(output_audio_path, synthesized)
