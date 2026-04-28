@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from src.modalities.audio.speech_to_text import (
     TranscriptToken,
@@ -16,15 +17,11 @@ def resolve_audio_output_path(input_path: str | Path, output_path: str | Path) -
     source = Path(input_path)
     target = Path(output_path)
 
-    # If caller gives a generic stem (from .anonymized original), retain source extension semantics.
-    if target.suffix.lower() != source.suffix.lower():
+    if not target.suffix:
         target = target.with_suffix(source.suffix)
 
     if ".anonymized" not in target.stem:
         target = target.with_name(f"{target.stem}.anonymized{target.suffix}")
-
-    if target.suffix.lower() != ".wav":
-        return target
 
     return target
 
@@ -60,6 +57,38 @@ def _silence_frames(duration_s: float, target: WavData) -> bytes:
     frame_count = int(round(duration_s * target.frame_rate))
     bytes_per_frame = target.channels * target.sample_width
     return b"\x00" * (frame_count * bytes_per_frame)
+
+
+def _fit_clip_to_duration(clip: WavData, duration_s: float, target: WavData) -> bytes:
+    if duration_s <= 0:
+        return b""
+
+    bytes_per_frame = target.channels * target.sample_width
+    target_frame_count = int(round(duration_s * target.frame_rate))
+    desired_bytes = target_frame_count * bytes_per_frame
+    clip_bytes = clip.frames[:desired_bytes]
+
+    if len(clip_bytes) < desired_bytes:
+        clip_bytes += b"\x00" * (desired_bytes - len(clip_bytes))
+
+    return clip_bytes
+
+
+_PLACEHOLDER_PATTERN = re.compile(r"\[([A-Z_]+)(\d+)?\]")
+
+
+def _prepare_anonymized_text_for_tts(text: str, labels: dict[str, str]) -> str:
+    def replace_placeholder(match: re.Match[str]) -> str:
+        entity = match.group(1)
+        mapped = labels.get(entity)
+        if mapped:
+            return mapped
+        return entity.replace("_", " ").lower()
+
+    normalized = _PLACEHOLDER_PATTERN.sub(replace_placeholder, text or "")
+    normalized = re.sub(r"\s+([,.;:!?])", r"\1", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or labels.get("default", "redacted")
 
 
 def _build_spoken_chunks(
@@ -193,8 +222,12 @@ def _synthesize_speech_timeline(
             kokoro_speed=kokoro_speed,
             kokoro_repo_id=kokoro_repo_id,
         )
-        output_parts.append(clip.frames)
-        cursor_time_s += clip.duration_s
+        chunk_duration_s = max(0.0, chunk.end_time_s - chunk.start_time_s)
+        output_parts.append(_fit_clip_to_duration(clip, chunk_duration_s, target_audio))
+        cursor_time_s = chunk.end_time_s
+
+    if cursor_time_s < target_audio.duration_s:
+        output_parts.append(_silence_frames(target_audio.duration_s - cursor_time_s, target_audio))
 
     return WavData(
         channels=target_audio.channels,
@@ -229,27 +262,25 @@ def process_audio_with_whisper(
     tokens = transcript.tokens
 
     anonymized_text, raw_results = anonymizer_tool.process_text(full_text)
-    chunks, detections = _build_spoken_chunks(tokens=tokens, raw_results=raw_results, labels=labels)
-
-    if not chunks:
-        fallback_text = anonymized_text.strip() or labels.get("default", "redacted")
-        chunks = [
-            SpokenChunk(
-                text=fallback_text,
-                start_time_s=0.0,
-                end_time_s=max(0.2, audio.duration_s),
-            )
-        ]
-
-    synthesized = _synthesize_speech_timeline(
-        chunks=chunks,
-        target_audio=audio,
-        tts_backend=tts_backend,
-        tts_cli_command=tts_cli_command,
+    _, detections = _build_spoken_chunks(tokens=tokens, raw_results=raw_results, labels=labels)
+    tts_text = _prepare_anonymized_text_for_tts(anonymized_text, labels)
+    print(f"[AudioPipeline] TTS text preview: {tts_text[:200]!r}")
+    synthesized_clip = synthesize_text_clip(
+        text=tts_text,
+        target=audio,
+        backend=tts_backend,
+        cli_command=tts_cli_command,
         kokoro_voice=kokoro_voice,
         kokoro_lang_code=kokoro_lang_code,
         kokoro_speed=kokoro_speed,
         kokoro_repo_id=kokoro_repo_id,
+    )
+
+    synthesized = WavData(
+        channels=audio.channels,
+        sample_width=audio.sample_width,
+        frame_rate=audio.frame_rate,
+        frames=_fit_clip_to_duration(synthesized_clip, audio.duration_s, audio),
     )
 
     write_wav(output_audio_path, synthesized)

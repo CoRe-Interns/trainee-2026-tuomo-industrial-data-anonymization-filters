@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.file_pipeline import detect_file_kind, process_input_directory, process_input_file
+from src.modalities.audio.audio_pipeline import resolve_audio_output_path
 from src.modalities.audio.speech_to_text import TranscriptToken, WhisperTranscript
 from src.modalities.audio.wav_ops import WavData
 
@@ -22,9 +23,9 @@ def _write_silent_wav(path: Path, frame_rate: int = 16000, duration_s: float = 1
 
 
 def _fake_synthesize_text_clip(
-    _text: str,
+    text: str,
     target: WavData,
-    backend: str = "pyttsx3",
+    backend: str = "piper",
     cli_command: str | None = None,
     kokoro_voice: str = "af_heart",
     kokoro_lang_code: str = "a",
@@ -130,10 +131,7 @@ class FilePipelineTests(unittest.TestCase):
             self.assertEqual(skipped_report["status"], "skipped")
             self.assertIn("not implemented yet", skipped_report["message"])
 
-    @patch("src.file_pipeline.ensure_ffmpeg_available")
-    @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
-    @patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip)
-    def test_process_audio_file_writes_anonymized_wav_and_report(self, _mock_synth, _mock_transcribe, _mock_ffmpeg):
+    def test_process_audio_file_writes_anonymized_wav_and_report(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             audio_file = root / "shift.wav"
@@ -141,7 +139,10 @@ class FilePipelineTests(unittest.TestCase):
 
             _write_silent_wav(audio_file)
 
-            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
+            with patch("src.file_pipeline.ensure_ffmpeg_available"), \
+                patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper), \
+                patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip):
+                result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
 
             self.assertEqual(result.status, "processed")
             self.assertEqual(result.detected_kind, "audio")
@@ -162,19 +163,18 @@ class FilePipelineTests(unittest.TestCase):
             output_bytes = Path(result.output_path).read_bytes()
             self.assertNotEqual(input_bytes, output_bytes)
 
-    @patch("src.file_pipeline.ensure_ffmpeg_available")
-    @patch("src.file_pipeline.transcode_wav_to_audio")
-    @patch("src.file_pipeline.convert_audio_to_wav")
-    @patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper)
-    @patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip)
-    def test_process_non_wav_audio_file_uses_conversion_when_enabled(
-        self,
-        _mock_synth,
-        _mock_transcribe,
-        mock_convert,
-        mock_transcode,
-        _mock_ffmpeg,
-    ):
+            with wave.open(str(audio_file), "rb") as input_handle:
+                input_frames = input_handle.getnframes()
+                input_rate = input_handle.getframerate()
+
+            with wave.open(str(result.output_path), "rb") as output_handle:
+                output_frames = output_handle.getnframes()
+                output_rate = output_handle.getframerate()
+
+            self.assertEqual(output_rate, input_rate)
+            self.assertEqual(output_frames, input_frames)
+
+    def test_process_non_wav_audio_file_uses_conversion_when_enabled(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             audio_file = root / "voice.mp3"
@@ -184,15 +184,16 @@ class FilePipelineTests(unittest.TestCase):
             audio_file.write_bytes(b"not-real-mp3-data")
             _write_silent_wav(converted_wav)
 
-            mock_convert.return_value = converted_wav
-
             def _fake_transcode(src_wav: str | Path, dst_audio: str | Path) -> None:
                 Path(dst_audio).parent.mkdir(parents=True, exist_ok=True)
                 Path(dst_audio).write_bytes(Path(src_wav).read_bytes())
 
-            mock_transcode.side_effect = _fake_transcode
-
-            result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
+            with patch("src.file_pipeline.ensure_ffmpeg_available"), \
+                patch("src.file_pipeline.convert_audio_to_wav", return_value=converted_wav) as mock_convert, \
+                patch("src.file_pipeline.transcode_wav_to_audio", side_effect=_fake_transcode) as mock_transcode, \
+                patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper), \
+                patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip):
+                result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
 
             self.assertEqual(result.status, "processed")
             self.assertEqual(result.detected_kind, "audio")
@@ -222,12 +223,10 @@ class FilePipelineTests(unittest.TestCase):
                     "enable_format_conversion": False,
                     "whisper_model": "base",
                     "whisper_language": "en",
-                    "tts_backend": "kokoro",
-                    "tts_cli_command": None,
-                    "kokoro_voice": "af_heart",
-                    "kokoro_lang_code": "a",
-                    "kokoro_speed": 1.0,
-                    "kokoro_repo_id": "hexgrad/Kokoro-82M",
+                        "tts_backend": "piper",
+                        "tts_cli_command": "piper --model C:\\path\\to\\fi.onnx --config C:\\path\\to\\fi.onnx.json --input-file {input_text_file} --output-file {output_wav}",
+                        "piper_voice": "taco_fi",
+                        "piper_sample_rate": 24000,
                     "placeholder_labels": {
                         "PERSON": "name",
                         "default": "redacted",
@@ -240,3 +239,53 @@ class FilePipelineTests(unittest.TestCase):
             self.assertEqual(result.status, "skipped")
             self.assertEqual(result.detected_kind, "audio")
             self.assertIn("format conversion", result.message or "")
+
+    def test_audio_pipeline_uses_auto_detect_when_whisper_language_is_unset(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            audio_file = root / "shift.wav"
+            output_dir = root / "output"
+
+            _write_silent_wav(audio_file)
+
+            with patch("src.file_pipeline.ensure_ffmpeg_available"), \
+                patch("src.modalities.audio.audio_pipeline.transcribe_audio_with_whisper", side_effect=_fake_transcribe_audio_with_whisper) as mock_transcribe, \
+                patch("src.modalities.audio.audio_pipeline.synthesize_text_clip", side_effect=_fake_synthesize_text_clip):
+                with patch("src.file_pipeline.load_policy_config") as mock_load_config:
+                    mock_load_config.return_value = {
+                        "policy_name": "strict",
+                        "entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "ID", "LOCATION"],
+                        "threshold": 0.3,
+                        "language": "en",
+                        "audio": {
+                            "mask_mode": "spoken_label",
+                            "enable_format_conversion": True,
+                            "conversion_sample_rate": 16000,
+                            "conversion_channels": 1,
+                            "whisper_model": "small",
+                            "tts_backend": "piper",
+                            "tts_cli_command": "piper --model C:\\path\\to\\fi.onnx --config C:\\path\\to\\fi.onnx.json --input-file {input_text_file} --output-file {output_wav}",
+                            "piper_voice": "taco_fi",
+                            "piper_sample_rate": 24000,
+                            "placeholder_labels": {
+                                "PERSON": "name",
+                                "default": "redacted",
+                            },
+                        },
+                    }
+
+                    result = process_input_file(audio_file, policy_name="strict", output_dir=output_dir)
+
+            self.assertEqual(result.status, "processed")
+            self.assertTrue(mock_transcribe.called)
+            self.assertIsNone(mock_transcribe.call_args.kwargs.get("language"))
+
+    def test_resolve_audio_output_path_preserves_explicit_extension(self):
+        self.assertEqual(
+            resolve_audio_output_path("voice.mp3", "custom.wav"),
+            Path("custom.anonymized.wav"),
+        )
+        self.assertEqual(
+            resolve_audio_output_path("voice.mp3", "custom"),
+            Path("custom.anonymized.mp3"),
+        )

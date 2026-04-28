@@ -125,9 +125,9 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
     enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
     conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
     conversion_channels = int(audio_cfg.get("conversion_channels", 1))
-    whisper_model = str(audio_cfg.get("whisper_model", "base"))
-    whisper_language_raw = audio_cfg.get("whisper_language", policy.get("language", "en") if isinstance(policy, dict) else "en")
-    tts_backend = str(audio_cfg.get("tts_backend", "pyttsx3")).strip().lower()
+    whisper_model = str(audio_cfg.get("whisper_model", "small"))
+    whisper_language_raw = audio_cfg.get("whisper_language")
+    tts_backend = str(audio_cfg.get("tts_backend", "piper")).strip().lower()
     tts_cli_command_raw = audio_cfg.get("tts_cli_command")
     kokoro_voice = str(audio_cfg.get("kokoro_voice", "af_heart")).strip()
     kokoro_lang_code = str(audio_cfg.get("kokoro_lang_code", "a")).strip()
@@ -149,8 +149,8 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         raise ValueError("Audio policy placeholder_labels must be an object")
     if not isinstance(whisper_model, str) or not whisper_model:
         raise ValueError("Audio policy whisper_model must be a non-empty string")
-    if tts_backend not in {"pyttsx3", "cli", "kokoro"}:
-        raise ValueError("Audio policy tts_backend must be one of: 'pyttsx3', 'cli', 'kokoro'")
+    if tts_backend != "piper":
+        raise ValueError("Audio policy tts_backend must be 'piper'")
     if not kokoro_voice:
         raise ValueError("Audio policy kokoro_voice must be a non-empty string")
     if not kokoro_lang_code:
@@ -165,11 +165,14 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         for key, value in labels.items()
     }
 
-    whisper_language = None if whisper_language_raw is None else str(whisper_language_raw)
+    if whisper_language_raw in (None, "", "auto"):
+        whisper_language = None
+    else:
+        whisper_language = str(whisper_language_raw)
     tts_cli_command = None if tts_cli_command_raw is None else str(tts_cli_command_raw)
 
-    if tts_backend == "cli" and (not tts_cli_command or not tts_cli_command.strip()):
-        raise ValueError("Audio policy tts_cli_command is required when tts_backend='cli'")
+    if not tts_cli_command or not tts_cli_command.strip():
+        raise ValueError("Audio policy tts_cli_command is required when tts_backend='piper'")
 
     return (
         labels_normalized,

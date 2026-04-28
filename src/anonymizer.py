@@ -4,8 +4,9 @@ from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, Recogn
 
 class AnonymizerTool:
     def __init__(self, entities, threshold, policy_name="light", language="en"):
-        # Initialize Presidio engines
-        self.analyzer = AnalyzerEngine()
+        # Initialize Presidio with no NLP engine so the custom pattern recognizers
+        # can run offline without downloading SpaCy language models.
+        self.analyzer = AnalyzerEngine(nlp_engine=None, supported_languages=[language])
         self.entities = entities
         self.threshold = threshold
         self.policy_name = policy_name

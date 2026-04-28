@@ -123,8 +123,8 @@ Audio anonymization is implemented as a speech-to-speech pipeline.
 
 - Input audio is transcribed to text with Whisper.
 - Sensitive content is detected and anonymized in text using the same policy engine as text files.
-- The anonymized transcript is synthesized back to audio.
-- Timing gaps from the transcript are preserved so output pacing remains natural.
+- The anonymized transcript is normalized for speech output and synthesized back to audio as one continuous utterance.
+- The synthesized audio is trimmed or padded to match the source duration so output length stays aligned with the input file.
 
 Supported audio processing modes:
 
@@ -133,17 +133,14 @@ Supported audio processing modes:
 
 Whisper configuration:
 
-- `audio.whisper_model` selects the Whisper model name, for example `base` or `small`.
-- `audio.whisper_language` sets the transcription language hint.
-- `audio.tts_backend` selects TTS backend (`kokoro`, `pyttsx3`, or `cli`).
-- `audio.kokoro_voice` sets the Kokoro voice id (default `af_heart`).
-- `audio.kokoro_lang_code` sets Kokoro language code (default `a`).
-- `audio.kokoro_speed` controls Kokoro speaking speed.
-- `audio.kokoro_repo_id` sets the Hugging Face Kokoro model repo (default `hexgrad/Kokoro-82M`).
-- `audio.tts_cli_command` provides the local CLI command template when `tts_backend` is `cli`.
+- `audio.whisper_model` selects the Whisper model name, for example `small`.
+- `audio.whisper_language` sets the transcription language hint. Omit it or set it to `auto` to let Whisper detect the language automatically.
+- `audio.tts_backend` is fixed to `piper`.
+- `audio.tts_cli_command` provides the Piper CLI command template.
   - The template can use `{text}`, `{input_text_file}`, and `{output_wav}` placeholders.
 - `ffmpeg` is required for Whisper transcription and for optional audio format conversion.
 - The app automatically tries common Windows ffmpeg install locations, including the WinGet package path, so UI sessions usually work without manually editing PATH.
+- For audio files, an explicit `--output-file` suffix is kept and the anonymized marker is inserted before that extension.
 
 Phase 2 conversion notes:
 
@@ -151,11 +148,12 @@ Phase 2 conversion notes:
 - Conversion requires local `ffmpeg` available on `PATH`.
 - Conversion behavior is controlled by `configs/policy.json` under `audio.enable_format_conversion`.
 
-Kokoro notes:
+Piper notes:
 
-- Kokoro is the default backend because it is substantially more understandable than system voices.
+- Piper is the only supported TTS backend.
 - Install dependencies from `requirements.txt` before running audio anonymization.
-- If you need a different backend temporarily, set `audio.tts_backend` to `cli` or `pyttsx3`.
+- `audio.tts_cli_command` must point to a working Piper command that includes a model/config pair.
+- For mixed-language or Finnish/English recordings, the default auto-detection path is preferred over forcing a single language hint.
 
 ## Policy behavior
 
@@ -212,7 +210,6 @@ Columns:
 ## Notes for contributors
 
 - Keep changes small and focused.
-- Software has to be local-only
 
 ## Versions
 
