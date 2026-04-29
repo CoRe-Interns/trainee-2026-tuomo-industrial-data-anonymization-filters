@@ -66,11 +66,6 @@ class AnonymizerTool:
                 ),
                 score=0.8,
             ),
-            Pattern(
-                name="likely_finnish_lowercase_full_name",
-                regex=r"(?i)\b[^\W\d_]{2,20}\s+[^\W\d_]*[äöå][^\W\d_]*\b",
-                score=0.78,
-            ),
         ]
         self.analyzer.registry.add_recognizer(
             PatternRecognizer(
@@ -121,6 +116,8 @@ class AnonymizerTool:
         for result in raw_results:
             span_text = text[result.start:result.end]
             if result.entity_type == "PERSON":
+                if not self._is_plausible_person_span(span_text):
+                    continue
                 lowered = span_text.strip().lower()
                 if lowered in {"email", "phone", "id", "badge", "employee"}:
                     continue
@@ -128,6 +125,7 @@ class AnonymizerTool:
             # Drop location false positives which often overlap phone/id-style fields.
             if result.entity_type == "LOCATION":
                 lowered = span_text.lower()
+                tokens = re.findall(r"[A-Za-zÅÄÖåäö]+", span_text)
                 has_digits = any(char.isdigit() for char in span_text)
                 has_location_keyword = any(
                     keyword in lowered
@@ -147,9 +145,10 @@ class AnonymizerTool:
                         "city",
                     ]
                 )
+                has_capitalized_token = any(token[:1].isupper() for token in tokens)
                 if "phone" in lowered:
                     continue
-                if has_digits and not has_location_keyword:
+                if not has_location_keyword and not has_capitalized_token:
                     continue
             results.append(result)
 
@@ -161,6 +160,22 @@ class AnonymizerTool:
         anonymized_text = self._apply_pseudonyms(text, results)
 
         return anonymized_text, results
+
+    @staticmethod
+    def _is_plausible_person_span(span_text: str) -> bool:
+        tokens = [token for token in re.findall(r"[A-Za-zÅÄÖåäö]+(?:[-'][A-Za-zÅÄÖåäö]+)*", span_text)]
+        if not tokens:
+            return False
+
+        if len(tokens) > 3:
+            return False
+
+        if any(token[0].isupper() for token in tokens):
+            return True
+
+        # Lowercase free text should not be treated as a person name unless it
+        # is already attached to a labeled field handled by the recognizer above.
+        return False
 
     @staticmethod
     def _dedupe_overlaps(results):

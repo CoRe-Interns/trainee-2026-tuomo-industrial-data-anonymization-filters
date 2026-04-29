@@ -3,11 +3,18 @@ import os
 import tempfile
 from io import StringIO
 from contextlib import redirect_stdout
+from pathlib import Path
+import sys
 
 from src.anonymizer import AnonymizerTool
 from src.file_pipeline import load_policy_config
 from main import run_anonymization
-from tests.run_text_anonymization_cases import run_cases
+
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
+
+from run_text_anonymization_cases import run_cases
 
 
 class TextAnonymizationTests(unittest.TestCase):
@@ -283,6 +290,40 @@ class TextAnonymizationTests(unittest.TestCase):
         self.assertNotIn("Mikko", anonymized)
         self.assertNotIn("Saarinen", anonymized)
         self.assertIn("[NAME1]", anonymized)
+
+    def test_light_mode_does_not_anonymize_plain_finnish_prose(self):
+        tool = AnonymizerTool(
+            entities=["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "ID", "CREDIT_CARD", "IBAN_CODE", "IP_ADDRESS", "LOCATION"],
+            threshold=0.4,
+            policy_name="light",
+            language="en",
+        )
+
+        text = (
+            "rakennusinsinööri vastaa rakennusprojektien suunnittelusta, toteutuksesta ja seurannasta. "
+            "Heidän työnsä sisältää teknisten piirrustusten laatimista, rakennusmateriaalien valintaa, "
+            "kustannusarvioiden tekemistä ja työmaan valvontaa. Rakennusinsinöörit työskentelevät tiiviissä "
+            "yhteistyössä muiden ammattilaisten kuten arkkitehtien, rakennustyöntekijöiden ja projektinjohtajien "
+            "kanssa varmistaakseen projektin sujuvan etenemisen ja laadun."
+        )
+
+        anonymized, results = tool.process_text(text)
+
+        self.assertEqual(anonymized, text)
+        self.assertEqual(results, [])
+
+    def test_light_mode_still_anonymizes_real_person_names(self):
+        tool = AnonymizerTool(
+            entities=["PERSON"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        anonymized, _ = tool.process_text("Supervisor: Sami Korpela checked the report")
+
+        self.assertIn("[NAME1]", anonymized)
+        self.assertNotIn("Sami", anonymized)
+        self.assertNotIn("Korpela", anonymized)
 
     def test_load_config_works_outside_repo_cwd(self):
         original_cwd = os.getcwd()
