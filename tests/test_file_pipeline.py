@@ -149,6 +149,9 @@ class FilePipelineTests(unittest.TestCase):
             self.assertIsNotNone(result.output_path)
             self.assertTrue(Path(result.output_path).exists())
             self.assertTrue(str(result.output_path).endswith(".wav"))
+            transcript_path = Path(result.output_path).with_suffix(".txt")
+            self.assertTrue(transcript_path.exists())
+            self.assertIn("[EMAIL]", transcript_path.read_text(encoding="utf-8"))
 
             self.assertIsNotNone(result.report_path)
             report = json.loads(Path(result.report_path).read_text(encoding="utf-8"))
@@ -221,12 +224,16 @@ class FilePipelineTests(unittest.TestCase):
                     "padding_ms": 90,
                     "duck_db": 16.0,
                     "enable_format_conversion": False,
-                    "whisper_model": "base",
-                    "whisper_language": "en",
-                        "tts_backend": "piper",
-                        "tts_cli_command": "piper --model C:\\path\\to\\fi.onnx --config C:\\path\\to\\fi.onnx.json --input-file {input_text_file} --output-file {output_wav}",
-                        "piper_voice": "taco_fi",
-                        "piper_sample_rate": 24000,
+                    "whisper_model": "medium",
+                    "whisper_language": "fi",
+                    "whisper_temperature": 0.0,
+                    "whisper_beam_size": 5,
+                    "whisper_best_of": 5,
+                    "whisper_initial_prompt": "Uusi työntekijä, työtunnus, linjalla, turvallisuusvaiheissa.",
+                    "tts_backend": "piper",
+                    "tts_cli_command": "piper --model C:\\path\\to\\fi.onnx --config C:\\path\\to\\fi.onnx.json --input-file {input_text_file} --output-file {output_wav}",
+                    "piper_voice": "taco_fi",
+                    "piper_sample_rate": 24000,
                     "placeholder_labels": {
                         "PERSON": "name",
                         "default": "redacted",
@@ -262,7 +269,12 @@ class FilePipelineTests(unittest.TestCase):
                             "enable_format_conversion": True,
                             "conversion_sample_rate": 16000,
                             "conversion_channels": 1,
-                            "whisper_model": "small",
+                            "whisper_model": "medium",
+                            "whisper_language": "auto",
+                            "whisper_temperature": 0.0,
+                            "whisper_beam_size": 5,
+                            "whisper_best_of": 5,
+                            "whisper_initial_prompt": "Uusi työntekijä, työtunnus, linjalla, turvallisuusvaiheissa.",
                             "tts_backend": "piper",
                             "tts_cli_command": "piper --model C:\\path\\to\\fi.onnx --config C:\\path\\to\\fi.onnx.json --input-file {input_text_file} --output-file {output_wav}",
                             "piper_voice": "taco_fi",

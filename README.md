@@ -125,6 +125,7 @@ Audio anonymization is implemented as a speech-to-speech pipeline.
 - Sensitive content is detected and anonymized in text using the same policy engine as text files.
 - The anonymized transcript is normalized for speech output and synthesized back to audio as one continuous utterance.
 - The synthesized audio is trimmed or padded to match the source duration so output length stays aligned with the input file.
+- A companion anonymized transcript text file is also written next to the audio output (same name, `.txt` extension).
 
 Supported audio processing modes:
 
@@ -135,6 +136,9 @@ Whisper configuration:
 
 - `audio.whisper_model` selects the Whisper model name, for example `small`.
 - `audio.whisper_language` sets the transcription language hint. Omit it or set it to `auto` to let Whisper detect the language automatically.
+- `audio.whisper_temperature` controls decoding randomness. Keep it at `0.0` for deterministic transcription.
+- `audio.whisper_beam_size` and `audio.whisper_best_of` can improve Finnish decoding quality when using beam search.
+- `audio.whisper_initial_prompt` can bias Whisper toward domain-specific vocabulary such as worker IDs, locations, and safety terms.
 - `audio.tts_backend` is fixed to `piper`.
 - `audio.tts_cli_command` provides the Piper CLI command template.
   - The template can use `{text}`, `{input_text_file}`, and `{output_wav}` placeholders.
@@ -154,6 +158,7 @@ Piper notes:
 - Install dependencies from `requirements.txt` before running audio anonymization.
 - `audio.tts_cli_command` must point to a working Piper command that includes a model/config pair.
 - For mixed-language or Finnish/English recordings, the default auto-detection path is preferred over forcing a single language hint.
+- For Finnish industrial speech, a stronger preset is recommended: `whisper_model=medium`, `whisper_language=fi`, `whisper_temperature=0.0`, `whisper_beam_size=5`, `whisper_best_of=5`, and a short Finnish `whisper_initial_prompt`.
 
 ## Policy behavior
 

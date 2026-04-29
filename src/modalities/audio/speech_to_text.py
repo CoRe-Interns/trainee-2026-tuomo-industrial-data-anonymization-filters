@@ -59,15 +59,26 @@ def transcribe_audio_with_whisper(
     audio_path: str | Path,
     model_name: str = "base",
     language: str | None = None,
+    temperature: float = 0.0,
+    beam_size: int | None = None,
+    best_of: int | None = None,
+    initial_prompt: str | None = None,
 ) -> WhisperTranscript:
     model = _load_whisper_model(model_name)
 
     transcription_kwargs: dict[str, object] = {
         "word_timestamps": True,
         "verbose": False,
+        "temperature": temperature,
     }
     if language is not None:
         transcription_kwargs["language"] = language
+    if beam_size is not None:
+        transcription_kwargs["beam_size"] = beam_size
+    if best_of is not None:
+        transcription_kwargs["best_of"] = best_of
+    if initial_prompt:
+        transcription_kwargs["initial_prompt"] = initial_prompt
 
     result = model.transcribe(str(Path(audio_path)), **transcription_kwargs)
     segments = result.get("segments", [])

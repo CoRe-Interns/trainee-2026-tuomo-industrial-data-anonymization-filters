@@ -120,13 +120,17 @@ def _serialise_detections(results) -> list[dict[str, object]]:
     ]
 
 
-def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, str | None, str, str | None, str, str, float, str]:
+def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, str | None, float, int | None, int | None, str | None, str, str | None, str, str, float, str]:
     audio_cfg = policy.get("audio", {}) if isinstance(policy, dict) else {}
     enable_conversion = bool(audio_cfg.get("enable_format_conversion", False))
     conversion_sample_rate = int(audio_cfg.get("conversion_sample_rate", 16000))
     conversion_channels = int(audio_cfg.get("conversion_channels", 1))
     whisper_model = str(audio_cfg.get("whisper_model", "small"))
     whisper_language_raw = audio_cfg.get("whisper_language")
+    whisper_temperature = float(audio_cfg.get("whisper_temperature", 0.0))
+    whisper_beam_size_raw = audio_cfg.get("whisper_beam_size")
+    whisper_best_of_raw = audio_cfg.get("whisper_best_of")
+    whisper_initial_prompt_raw = audio_cfg.get("whisper_initial_prompt")
     tts_backend = str(audio_cfg.get("tts_backend", "piper")).strip().lower()
     tts_cli_command_raw = audio_cfg.get("tts_cli_command")
     kokoro_voice = str(audio_cfg.get("kokoro_voice", "af_heart")).strip()
@@ -169,6 +173,15 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         whisper_language = None
     else:
         whisper_language = str(whisper_language_raw)
+    if whisper_beam_size_raw in (None, ""):
+        whisper_beam_size = None
+    else:
+        whisper_beam_size = int(whisper_beam_size_raw)
+    if whisper_best_of_raw in (None, ""):
+        whisper_best_of = None
+    else:
+        whisper_best_of = int(whisper_best_of_raw)
+    whisper_initial_prompt = None if whisper_initial_prompt_raw in (None, "") else str(whisper_initial_prompt_raw)
     tts_cli_command = None if tts_cli_command_raw is None else str(tts_cli_command_raw)
 
     if not tts_cli_command or not tts_cli_command.strip():
@@ -181,6 +194,10 @@ def _audio_config(policy: dict) -> tuple[dict[str, str], bool, int, int, str, st
         conversion_channels,
         whisper_model,
         whisper_language,
+        whisper_temperature,
+        whisper_beam_size,
+        whisper_best_of,
+        whisper_initial_prompt,
         tts_backend,
         tts_cli_command,
         kokoro_voice,
@@ -298,6 +315,10 @@ def process_input_file(
                 conversion_channels,
                 whisper_model,
                 whisper_language,
+                whisper_temperature,
+                whisper_beam_size,
+                whisper_best_of,
+                whisper_initial_prompt,
                 tts_backend,
                 tts_cli_command,
                 kokoro_voice,
@@ -340,12 +361,16 @@ def process_input_file(
                 working_audio_output = converted_output
 
             try:
-                detections, message = process_audio_with_whisper(
+                detections, message, anonymized_text = process_audio_with_whisper(
                     audio_path=working_audio_input,
                     output_audio_path=working_audio_output,
                     anonymizer_tool=tool,
                     whisper_model=whisper_model,
                     whisper_language=whisper_language,
+                    whisper_temperature=whisper_temperature,
+                    whisper_beam_size=whisper_beam_size,
+                    whisper_best_of=whisper_best_of,
+                    whisper_initial_prompt=whisper_initial_prompt,
                     labels=labels,
                     tts_backend=tts_backend,
                     tts_cli_command=tts_cli_command,
@@ -358,6 +383,24 @@ def process_input_file(
                 cleanup_temp_audio(converted_input)
                 if converted_output is not None:
                     if message is None:
+                        # Guard: ensure the synthesized wav exists before attempting transcode.
+                        try:
+                            converted_path = Path(converted_output)
+                            exists = converted_path.exists()
+                        except Exception:
+                            exists = False
+
+                        if not exists:
+                            try:
+                                parent = Path(converted_output).parent
+                                listing = ", ".join([p.name for p in parent.iterdir()])
+                            except Exception:
+                                listing = "<unable to list directory>"
+                            raise RuntimeError(
+                                f"Expected synthesized WAV missing before transcode: {converted_output}. Parent listing: {listing}"
+                            )
+
+                        print(f"[FilePipeline] transcoding synthesized WAV: {converted_output} -> {output_audio_path}")
                         transcode_wav_to_audio(converted_output, output_audio_path)
                     cleanup_temp_audio(converted_output)
 
@@ -373,6 +416,8 @@ def process_input_file(
                     message=message,
                 )
             else:
+                transcript_output_path = output_audio_path.with_suffix(".txt")
+                transcript_output_path.write_text(anonymized_text, encoding="utf-8")
                 result = FileProcessingResult(
                     input_path=str(path),
                     detected_kind=detected_kind,

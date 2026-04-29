@@ -78,6 +78,10 @@ def read_wav(path: str | Path) -> WavData:
 def write_wav(path: str | Path, data: WavData) -> None:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        print(f"[WavOps] writing WAV to: {output_path}")
+    except Exception:
+        pass
     with wave.open(str(output_path), "wb") as handle:
         handle.setnchannels(data.channels)
         handle.setsampwidth(data.sample_width)

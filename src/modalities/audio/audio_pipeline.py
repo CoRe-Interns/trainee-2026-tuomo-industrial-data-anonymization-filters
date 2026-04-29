@@ -243,6 +243,10 @@ def process_audio_with_whisper(
     anonymizer_tool,
     whisper_model: str,
     whisper_language: str | None,
+    whisper_temperature: float,
+    whisper_beam_size: int | None,
+    whisper_best_of: int | None,
+    whisper_initial_prompt: str | None,
     labels: dict[str, str],
     tts_backend: str,
     tts_cli_command: str | None,
@@ -250,13 +254,17 @@ def process_audio_with_whisper(
     kokoro_lang_code: str,
     kokoro_speed: float,
     kokoro_repo_id: str,
-) -> tuple[list[dict[str, object]], str | None]:
+) -> tuple[list[dict[str, object]], str | None, str]:
     audio = read_wav(audio_path)
 
     transcript = transcribe_audio_with_whisper(
         audio_path=audio_path,
         model_name=whisper_model,
         language=whisper_language,
+        temperature=whisper_temperature,
+        beam_size=whisper_beam_size,
+        best_of=whisper_best_of,
+        initial_prompt=whisper_initial_prompt,
     )
     full_text = transcript.text
     tokens = transcript.tokens
@@ -284,4 +292,9 @@ def process_audio_with_whisper(
     )
 
     write_wav(output_audio_path, synthesized)
-    return detections, None
+    try:
+        exists = Path(output_audio_path).exists()
+    except Exception:
+        exists = False
+    print(f"[AudioPipeline] wrote synthesized WAV to: {output_audio_path} (exists={exists})")
+    return detections, None, anonymized_text
