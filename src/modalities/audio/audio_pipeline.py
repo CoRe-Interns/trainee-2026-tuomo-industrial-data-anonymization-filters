@@ -77,6 +77,89 @@ def _fit_clip_to_duration(clip: WavData, duration_s: float, target: WavData) -> 
 _PLACEHOLDER_PATTERN = re.compile(r"\[([A-Z_]+)(\d+)?\]")
 
 
+def _normalize_spoken_email_markers(text: str) -> str:
+    """
+    Normalize spoken email markers in Whisper transcripts.
+    
+    Only reconstructs dotted sequences into emails when:
+    1. Preceded by email context keywords, OR
+    2. Ends with a known email TLD and appears to be a local-part pattern.
+    
+    This prevents false positives like "degree 4 . 2" or "chapter 3 . 5".
+    
+    Examples:
+    - "sähköpostilla tero . raja . company . fi" -> "sähköpostilla tero.raja@company.fi"
+    - "email tero piste raja piste company piste fi" -> "email tero.raja@company.fi"
+    - "degree 4 . 2" -> unchanged (no email TLD)
+    """
+    email_tlds = {
+        "fi", "com", "net", "org", "eu", "se", "io", "co", "uk", "de", "fr",
+        "it", "es", "nl", "be", "at", "ch", "ru", "ua", "pl", "cz", "hu",
+        "ro", "bg", "hr", "si", "sk", "gr", "pt", "ie", "us", "ca", "au",
+        "nz", "jp", "cn", "in", "br", "mx", "ar", "za"
+    }
+    
+    email_context_keywords = {
+        "sähköpostilla", "sähköposti", "email", "contact", "posti", "osoite"
+    }
+    
+    normalized = text
+    
+    # Replace spoken dot/piste markers with periods (remove surrounding spaces)
+    normalized = re.sub(r"\s+piste\s+", ".", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+dot\s+", ".", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+pisteen\s+", ".", normalized, flags=re.IGNORECASE)
+    # Handle standalone period tokens " . " -> "."
+    normalized = re.sub(r"\s+\.\s+", ".", normalized)
+    
+    # Replace spoken @ variants: "at", "ät", "at-merkki", "ät-merkki"
+    normalized = re.sub(r"(?i)\s+(?:ät|at)[\s-]?merkki?\s+", "@", normalized)
+    
+    # Check for email context in the text
+    text_lower = normalized.lower()
+    has_email_context = any(kw in text_lower for kw in email_context_keywords)
+    
+    # Reconstruct patterns: word[.word]+.tld into email if context is right
+    def try_reconstruct_email(match):
+        sequence = match.group(0)
+        parts = sequence.split(".")
+        
+        # Need at least 3 parts: local.domain.tld
+        if len(parts) < 3:
+            return sequence
+        
+        last_part = parts[-1].lower()
+        if last_part not in email_tlds:
+            return sequence
+        
+        # Only reconstruct if:
+        # 1. Email context keyword found nearby, OR
+        # 2. The local part looks plausible (lowercase-ish, alphanumeric)
+        if has_email_context:
+            local = ".".join(parts[:-2])
+            domain = ".".join(parts[-2:])
+            if "@" not in sequence:
+                return f"{local}@{domain}"
+            return sequence
+        
+        # Without email context, only reconstruct if all parts are lowercase/digits/hyphens
+        # (to avoid matching "Chapter . 3 . 5" or similar)
+        if all(p.islower() or p.isdigit() or p in {"-", "_"} for p in parts):
+            local = ".".join(parts[:-2])
+            domain = ".".join(parts[-2:])
+            if "@" not in sequence:
+                return f"{local}@{domain}"
+        
+        return sequence
+    
+    # Match multi-dot sequences ending with known TLD
+    tld_pattern = "|".join(email_tlds)
+    pattern = rf"\b(?:[a-z0-9._-]+\.)+(?:{tld_pattern})\b"
+    normalized = re.sub(pattern, try_reconstruct_email, normalized, flags=re.IGNORECASE)
+    
+    return normalized
+
+
 def _prepare_anonymized_text_for_tts(text: str, labels: dict[str, str]) -> str:
     def replace_placeholder(match: re.Match[str]) -> str:
         entity = match.group(1)
@@ -269,7 +352,10 @@ def process_audio_with_whisper(
     full_text = transcript.text
     tokens = transcript.tokens
 
-    anonymized_text, raw_results = anonymizer_tool.process_text(full_text)
+    # Normalize spoken email markers (e.g., "tero . raj . company . fi" -> "tero.raj@company.fi")
+    normalized_text = _normalize_spoken_email_markers(full_text)
+
+    anonymized_text, raw_results = anonymizer_tool.process_text(normalized_text)
     _, detections = _build_spoken_chunks(tokens=tokens, raw_results=raw_results, labels=labels)
     tts_text = _prepare_anonymized_text_for_tts(anonymized_text, labels)
     print(f"[AudioPipeline] TTS text preview: {tts_text[:200]!r}")

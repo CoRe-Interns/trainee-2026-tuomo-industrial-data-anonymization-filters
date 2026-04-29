@@ -152,6 +152,10 @@ class AnonymizerTool:
                     continue
             results.append(result)
 
+        # Add fallback email detection for dotted patterns that Presidio may have missed
+        if "EMAIL_ADDRESS" in self.entities:
+            results.extend(self._find_fallback_emails(text, results))
+
         results = self._expand_person_to_neighboring_full_name(text, results)
         results = self._expand_person_name_references(text, results)
         results = self._dedupe_overlaps(results)
@@ -176,6 +180,81 @@ class AnonymizerTool:
         # Lowercase free text should not be treated as a person name unless it
         # is already attached to a labeled field handled by the recognizer above.
         return False
+
+    def _find_fallback_emails(self, text: str, existing_results: list) -> list:
+        """
+        Detect dotted email patterns that Presidio may have missed.
+        
+        Only reconstructs emails when:
+        1. Pattern ends with known email TLD, AND
+        2. Either preceded by email context OR looks like a standard email local-part
+        
+        This catches patterns like "tero.raja@company.fi" or "john.doe.acme.com"
+        that survived Whisper/normalization but weren't detected by standard email regex.
+        """
+        email_tlds = {
+            "fi", "com", "net", "org", "eu", "se", "io", "co", "uk", "de", "fr",
+            "it", "es", "nl", "be", "at", "ch", "ru", "ua", "pl", "cz", "hu",
+            "ro", "bg", "hr", "si", "sk", "gr", "pt", "ie", "us", "ca", "au",
+            "nz", "jp", "cn", "in", "br", "mx", "ar", "za"
+        }
+        email_context_keywords = {
+            "sähköpostilla", "sähköposti", "email", "contact", "posti", "osoite"
+        }
+        
+        new_detections = []
+        text_lower = text.lower()
+        
+        # Check for email context
+        has_email_context = any(kw in text_lower for kw in email_context_keywords)
+        
+        # Pattern: word[.word]+[@]word[.word]+.tld
+        # Matches: john.doe@acme.com, john.doe.acme.com, etc.
+        tld_pattern = "|".join(email_tlds)
+        pattern = rf"(?:^|\s)([a-z0-9._-]+(?:@|\.)[a-z0-9._-]*\.(?:{tld_pattern}))\b"
+        
+        for match in re.finditer(pattern, text_lower):
+            span_text = match.group(1)
+            start = match.start(1)
+            end = match.end(1)
+            
+            # Skip if this span overlaps with existing detections
+            overlaps = any(
+                not (end <= existing.start or start >= existing.end)
+                for existing in existing_results
+            )
+            if overlaps:
+                continue
+            
+            # Only include if:
+            # 1. Has @ (standard email), OR
+            # 2. Has email context AND looks like email local-part
+            if "@" in span_text:
+                new_detections.append(
+                    RecognizerResult(
+                        entity_type="EMAIL_ADDRESS",
+                        start=start,
+                        end=end,
+                        score=0.85,  # Slightly lower than Presidio standard (0.95) since this is fallback
+                    )
+                )
+            elif has_email_context:
+                # Check local part plausibility
+                parts = span_text.split(".")
+                if len(parts) >= 3 and parts[0]:
+                    local = ".".join(parts[:-2])
+                    # Only if local part looks standard (lowercase, alphanumeric, _, -)
+                    if re.match(r"^[a-z0-9._-]+$", local):
+                        new_detections.append(
+                            RecognizerResult(
+                                entity_type="EMAIL_ADDRESS",
+                                start=start,
+                                end=end,
+                                score=0.80,  # Lower confidence for context-only reconstruction
+                            )
+                        )
+        
+        return new_detections
 
     @staticmethod
     def _dedupe_overlaps(results):
