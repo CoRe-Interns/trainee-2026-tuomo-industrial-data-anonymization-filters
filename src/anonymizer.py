@@ -146,9 +146,11 @@ class AnonymizerTool:
                     ]
                 )
                 has_capitalized_token = any(token[:1].isupper() for token in tokens)
+                # Reject likely false positives: single capitalized tokens at sentence
+                # start (e.g., "Koulutuksessa") should not be labeled as LOCATION.
                 if "phone" in lowered:
                     continue
-                if not has_location_keyword and not has_capitalized_token:
+                if not has_location_keyword and not (has_capitalized_token and len(tokens) > 1):
                     continue
             results.append(result)
 
@@ -174,11 +176,15 @@ class AnonymizerTool:
         if len(tokens) > 3:
             return False
 
-        if any(token[0].isupper() for token in tokens):
+        # Require at least two capitalized tokens to consider a PERSON span
+        # (reduces false positives from sentence-initial capitalized words).
+        cap_count = sum(1 for token in tokens if token[0].isupper())
+        if cap_count >= 2:
             return True
 
-        # Lowercase free text should not be treated as a person name unless it
-        # is already attached to a labeled field handled by the recognizer above.
+        # Single capitalized token shouldn't be treated as a person unless
+        # it originates from an explicit labeled field (the recognizers handle
+        # labeled fields separately). Be conservative here.
         return False
 
     def _find_fallback_emails(self, text: str, existing_results: list) -> list:

@@ -106,14 +106,14 @@ def _normalize_spoken_email_markers(text: str) -> str:
     normalized = text
     
     # Replace spoken dot/piste markers with periods (remove surrounding spaces)
-    normalized = re.sub(r"\s+piste\s+", ".", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"\s+dot\s+", ".", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"\s+pisteen\s+", ".", normalized, flags=re.IGNORECASE)
-    # Handle standalone period tokens " . " -> "."
-    normalized = re.sub(r"\s+\.\s+", ".", normalized)
+    normalized = re.sub(r"(?i)\bpiste\b", ".", normalized)
+    normalized = re.sub(r"(?i)\bdot\b", ".", normalized)
+    normalized = re.sub(r"(?i)\bpisteen\b", ".", normalized)
+    # Collapse any spaces around literal dots: handles ' . ', '.word', 'word .'
+    normalized = re.sub(r"\s*\.\s*", ".", normalized)
     
     # Replace spoken @ variants: "at", "ät", "at-merkki", "ät-merkki"
-    normalized = re.sub(r"(?i)\s+(?:ät|at)[\s-]?merkki?\s+", "@", normalized)
+    normalized = re.sub(r"(?i)\b(?:ät|at)(?:[\s-]?merkki)?\b", "@", normalized)
     
     # Check for email context in the text
     text_lower = normalized.lower()
