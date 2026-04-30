@@ -3,13 +3,41 @@ PAGE 2 — SHIFT B REPORT (14:00–22:00)
 Supervisor: Elina Rantanen (EMP-FI-2291)
 Date: 2026-03-03
 
-Took over from Kari at 14:00. He mentioned “keep an eye on 4421.”
-14:25 — Olli Mäkinen (INSP-91) flagged batch B-77830 for surface defects. Photos saved on shared drive under /quality/olli/.
-15:10 — New operator, Sami Korpela (FI-9912), started training on L3. Needed repeated guidance, especially safety steps.
-16:45 — Oil leak noticed again near PR-0091. Same spot as yesterday per Mikko’s earlier message on WhatsApp group.
-18:00 — Dinner break.
-19:20 — Small incident: Sami almost bypassed guard sensor. Anna intervened quickly. No official report filed.
-21:50 — All lines stable at shift end.
+Shift officially taken over from Kari at exactly 14:00. Handover was brief but included a specific verbal note to “keep an eye on 4421,” which he did not elaborate on in detail. Based on tone and context, the issue may relate to prior irregular behavior or intermittent faults. No written remark left in the system regarding this point.
+
+14:25 — Olli Mäkinen (INSP-91) flagged batch B-77830 during routine inspection. Reported visible surface defects affecting multiple units within the batch. Defects appear inconsistent in pattern, suggesting possible upstream process variation rather than isolated contamination. Olli documented the issue thoroughly and saved supporting photos on the shared drive under /quality/olli/. Follow-up from quality team likely required.
+
+15:10 — New operator, Sami Korpela (FI-9912), began initial hands-on training on Line 3 (L3). Training progress was slower than expected. Required repeated instruction on standard operating procedures, particularly safety-related steps such as lockout checks and sensor awareness. Demonstrated uncertainty when operating controls independently. Trainer had to intervene multiple times to correct handling and reinforce instructions.
+
+15:40 — Sami continued supervised operation but showed inconsistent adherence to instructions. Needed reminders about sequence order and proper machine interaction. No critical mistakes occurred at this stage, but performance indicates limited retention so far.
+
+16:20 — Minor slowdown observed on L3 due to operator hesitation and repeated clarifications. No mechanical fault detected; delay attributed fully to training inefficiency.
+
+16:45 — Oil leak observed again near PR-0091. Location matches the same spot reported previously. Cross-reference with Mikko’s earlier message in the WhatsApp group confirms recurrence of the issue from the previous day. Leak volume small but persistent. No immediate hazard created, but long-term reliability concern remains. Maintenance has not yet resolved root cause.
+
+17:10 — Area around PR-0091 cleaned temporarily to prevent slip risk. No maintenance team present during this window. Issue logged again for follow-up.
+
+18:00 — Dinner break taken as scheduled. All lines paused or running at minimal supervised capacity depending on section.
+
+18:30 — Operations resumed. No immediate abnormalities detected post-break. Systems stabilized quickly.
+
+19:20 — Small incident involving Sami Korpela. He nearly bypassed a guard sensor while attempting to continue operation during a minor interruption. Action was stopped immediately by Anna, who intervened before any unsafe condition escalated. No injury, no equipment damage. Incident was not escalated into an official report, but behavior indicates insufficient understanding of safety protocols.
+
+19:35 — Verbal warning given to Sami. Safety procedures reiterated in detail. He acknowledged but appeared uncertain. Close monitoring continued for remainder of shift.
+
+20:10 — General production flow stable across all lines. No further operator-related incidents recorded.
+
+20:45 — Routine checks completed. No new defects or deviations detected.
+
+21:20 — Final inspection rounds initiated. Equipment status normal. No additional leaks or faults observed beyond previously noted PR-0091 issue.
+
+21:50 — Shift approaching end. All lines stable and operating within expected parameters. No last-minute disruptions.
+
+22:00 — Shift concluded. Handover notes prepared for next team with emphasis on:
+
+* Monitoring unit 4421
+* Recurring oil leak at PR-0091
+* Continued supervision requirement for new operator
 
 Additional comment:
-Sami may need closer supervision. Consider extending training period.
+Sami Korpela is not yet operating at required level for independent work. Repetition alone is not resolving gaps in understanding, especially in safety-critical behavior. Recommend extending training period and assigning closer supervision until consistent compliance is demonstrated. Potential risk if left unsupervised too early.

@@ -5,6 +5,7 @@
         "EMAIL_ADDRESS",
         "PHONE_NUMBER",
         "ID",
+        "FILE_PATH",
         "CREDIT_CARD",
         "IBAN_CODE",
         "IP_ADDRESS",
@@ -37,6 +38,7 @@
             "ID": "id",
             "EMAIL_ADDRESS": "email",
             "PHONE_NUMBER": "phone number",
+            "FILE_PATH": "file path",
             "default": "redacted"
         }
     }

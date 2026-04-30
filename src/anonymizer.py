@@ -56,6 +56,30 @@ class AnonymizerTool:
         )
         self.analyzer.registry.add_recognizer(id_recognizer)
 
+        file_path_recognizer = PatternRecognizer(
+            supported_entity="FILE_PATH",
+            name="file_path_like",
+            patterns=[
+                Pattern(
+                    name="unix_or_relative_path",
+                    regex=(
+                        r"(?<![A-Za-z0-9_])(?:\.{1,2}[\\/]|[\\/])"
+                        r"[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+){1,}[\\/]?"
+                    ),
+                    score=0.92,
+                ),
+                Pattern(
+                    name="windows_drive_path",
+                    regex=(
+                        r"(?i)(?<![A-Za-z0-9_])[A-Z]:\\"
+                        r"(?:[^\\/:*?\"<>|\r\n]+\\){1,}[^\\/:*?\"<>|\r\n]*"
+                    ),
+                    score=0.95,
+                ),
+            ],
+        )
+        self.analyzer.registry.add_recognizer(file_path_recognizer)
+
         # Field-oriented patterns are more stable than sentence-specific cues.
         person_patterns = [
             Pattern(
@@ -72,6 +96,24 @@ class AnonymizerTool:
                 supported_entity="PERSON",
                 name="field_person_name",
                 patterns=person_patterns,
+            )
+        )
+
+        full_name_patterns = [
+            Pattern(
+                name="capitalized_full_name",
+                regex=(
+                    r"(?<![A-Za-zÅÄÖåäö])[A-ZÅÄÖ][a-zåäö]+(?:[-'][A-ZÅÄÖa-zåäö]+)?"
+                    r"(?:\s+[A-ZÅÄÖ][a-zåäö]+(?:[-'][A-ZÅÄÖa-zåäö]+)?){1,2}(?![A-Za-zÅÄÖåäö])"
+                ),
+                score=0.83,
+            ),
+        ]
+        self.analyzer.registry.add_recognizer(
+            PatternRecognizer(
+                supported_entity="PERSON",
+                name="capitalized_full_name",
+                patterns=full_name_patterns,
             )
         )
 
@@ -440,6 +482,7 @@ class AnonymizerTool:
             "EMAIL_ADDRESS": "EMAIL",
             "PHONE_NUMBER": "PHONE",
             "ID": "ID",
+            "FILE_PATH": "FILE_PATH",
             "CREDIT_CARD": "CREDIT_CARD",
             "IBAN_CODE": "IBAN",
             "IP_ADDRESS": "IP_ADDRESS",
@@ -462,6 +505,7 @@ class AnonymizerTool:
                 "EMAIL_ADDRESS": "EMAIL",
                 "PHONE_NUMBER": "PHONE",
                 "ID": "ID",
+                "FILE_PATH": "FILE_PATH",
                 "CREDIT_CARD": "CREDIT_CARD",
                 "IBAN_CODE": "IBAN",
                 "IP_ADDRESS": "IP_ADDRESS",

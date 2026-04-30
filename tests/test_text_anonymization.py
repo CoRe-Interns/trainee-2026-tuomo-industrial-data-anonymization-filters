@@ -261,6 +261,32 @@ class TextAnonymizationTests(unittest.TestCase):
 
         self.assertEqual(anonymized.count("[EMAIL1]"), 2)
 
+    def test_light_mode_masks_unix_style_file_path(self):
+        tool = AnonymizerTool(
+            entities=["FILE_PATH"],
+            threshold=0.3,
+            policy_name="light",
+        )
+
+        text = "Photos saved under /quality/olli/ for review"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertIn("[FILE_PATH1]", anonymized)
+        self.assertNotIn("/quality/olli/", anonymized)
+
+    def test_strict_mode_masks_windows_drive_path(self):
+        tool = AnonymizerTool(
+            entities=["FILE_PATH"],
+            threshold=0.3,
+            policy_name="strict",
+        )
+
+        text = r"Path logged at C:\Users\olli\Documents\incident.txt"
+        anonymized, _ = tool.process_text(text)
+
+        self.assertIn("[FILE_PATH]", anonymized)
+        self.assertNotIn(r"C:\Users\olli\Documents\incident.txt", anonymized)
+
     def test_light_mode_assigns_names_in_left_to_right_order(self):
         tool = AnonymizerTool(
             entities=["PERSON"],

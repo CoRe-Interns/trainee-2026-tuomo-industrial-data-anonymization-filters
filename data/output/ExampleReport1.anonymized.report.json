@@ -26,6 +26,12 @@
     },
     {
       "entity_type": "PERSON",
+      "start_pos": 119,
+      "end_pos": 131,
+      "confidence": 0.83
+    },
+    {
+      "entity_type": "PERSON",
       "start_pos": 140,
       "end_pos": 153,
       "confidence": 0.85
@@ -56,6 +62,12 @@
     },
     {
       "entity_type": "PERSON",
+      "start_pos": 459,
+      "end_pos": 478,
+      "confidence": 0.83
+    },
+    {
+      "entity_type": "PERSON",
       "start_pos": 555,
       "end_pos": 566,
       "confidence": 0.85
@@ -69,13 +81,13 @@
     {
       "entity_type": "PERSON",
       "start_pos": 648,
-      "end_pos": 652,
-      "confidence": 0.79
+      "end_pos": 662,
+      "confidence": 0.83
     },
     {
       "entity_type": "PERSON",
-      "start_pos": 657,
-      "end_pos": 662,
+      "start_pos": 728,
+      "end_pos": 732,
       "confidence": 0.79
     },
     {
