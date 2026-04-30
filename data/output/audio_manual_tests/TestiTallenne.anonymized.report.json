@@ -12,6 +12,13 @@
       "end_time_s": 2.86,
       "replacement_label": "name",
       "confidence": 0.85
+    },
+    {
+      "entity_type": "PERSON",
+      "start_time_s": 8.3,
+      "end_time_s": 9.96,
+      "replacement_label": "name",
+      "confidence": 0.85
     }
   ],
   "message": null

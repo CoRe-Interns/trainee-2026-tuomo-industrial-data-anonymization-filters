@@ -116,8 +116,25 @@ class AnonymizerTool:
         for result in raw_results:
             span_text = text[result.start:result.end]
             if result.entity_type == "PERSON":
+                # Allow single-token PERSON spans if they are clearly in a labeled
+                # field context (e.g., "Supervisor: Sami") even though the
+                # general plausibility check requires 2+ capitalized tokens.
                 if not self._is_plausible_person_span(span_text):
-                    continue
+                    tokens_for_person = re.findall(r"[A-Za-zÅÄÖåäö]+(?:[-'][A-Za-zÅÄÖåäö]+)*", span_text)
+                    cap_count = sum(1 for t in tokens_for_person if t and t[0].isupper())
+                    if not (len(tokens_for_person) == 1 and cap_count == 1):
+                        continue
+                    # Check preceding context for label markers that indicate
+                    # this single token is a labeled name value.
+                    prefix = text[max(0, result.start - 30): result.start].lower()
+                    label_markers = [
+                        "name=", "name:", "contact name", "full name",
+                        "supervisor:", "supervisor", "operator:", "operator",
+                        "manager:", "manager", "esimies", "pomo", "johtaja",
+                        "työnjohtaja", "valvoja", "operaattori",
+                    ]
+                    if not any(marker in prefix for marker in label_markers):
+                        continue
                 lowered = span_text.strip().lower()
                 if lowered in {"email", "phone", "id", "badge", "employee"}:
                     continue

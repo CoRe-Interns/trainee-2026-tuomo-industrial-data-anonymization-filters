@@ -56,12 +56,6 @@
     },
     {
       "entity_type": "PERSON",
-      "start_pos": 459,
-      "end_pos": 473,
-      "confidence": 0.86
-    },
-    {
-      "entity_type": "PERSON",
       "start_pos": 555,
       "end_pos": 566,
       "confidence": 0.85
@@ -82,7 +76,7 @@
       "entity_type": "PERSON",
       "start_pos": 657,
       "end_pos": 662,
-      "confidence": 0.85
+      "confidence": 0.79
     },
     {
       "entity_type": "PERSON",
